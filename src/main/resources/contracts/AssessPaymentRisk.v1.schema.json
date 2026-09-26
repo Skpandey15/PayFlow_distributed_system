@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:AssessPaymentRisk:v1",
+  "title": "AssessPaymentRisk v1",
+  "description": "Command. Channel fields are personal data: fraud.commands is readable by fraud-service only.",
+  "x-topic": "fraud.commands",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "payerAccountId",
+    "payeeAccountId",
+    "amount",
+    "currency",
+    "method"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payerAccountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payeeAccountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^-?\\d{1,15}(\\.\\d{1,4})?$",
+      "description": "Decimal string; never a JSON number"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "method": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deviceId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ipAddress": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "userAgent": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "countryCode": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

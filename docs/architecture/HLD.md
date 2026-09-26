@@ -1,4 +1,4 @@
-# PayFlow: High-Level Design (as of WP-01)
+# PayFlow: High-Level Design (as of WP-02)
 
 ## 1. Purpose and scope
 
@@ -59,21 +59,19 @@ Semantics:
 
 The proposed `VALIDATING` state was dropped: validation is synchronous inside the create transaction, so a persisted "validating" state could never be observed (see LLD §3).
 
-## 5. Key flows (WP-01, synchronous)
+## 5. Key flows (WP-02, asynchronous saga)
 
 1. **Create.** `POST /payments` with `Idempotency-Key`.
    - Ownership, eligibility and currency are checked via Account.
-   - One transaction inserts the payment and the idempotency record, and publishes `PaymentCreated`.
-2. **Authorize.** The processor identity calls it.
-   - Eligibility is checked via Account, then risk via Fraud (MongoDB), both outside any transaction.
-   - A short transaction then records AUTHORIZED or REJECTED.
-3. **Process.** The processor identity calls it.
-   - Transaction 1 claims the payment (AUTHORIZED → PROCESSING).
-   - Settlement runs, outside any transaction and idempotent.
-   - Transaction 2 records SETTLED or FAILED.
-   - The idempotent ledger posting follows.
+   - **One transaction** inserts the payment, the idempotency record and the saga (AWAITING_RISK), and writes `PaymentCreated` and `AssessPaymentRisk` to the Payment **outbox**.
+   - The response is 201 with status CREATED.
+2. **Saga** (orchestrated by Payment over Kafka; see SAGA-DESIGN):
+   `AssessPaymentRisk` → Fraud (MongoDB) → `RiskAssessed` → `ReserveFunds` → Account (row lock, CHECK) → `FundsReserved` → payment AUTHORIZED/PROCESSING → `SubmitSettlement` → Settlement (rail) → `SettlementCompleted` → `CaptureFunds` → `FundsCaptured` → payment SETTLED.
+   Declines and timeouts compensate with `ReleaseFunds`.
+3. **Ledger** follows `funds.events` (captures, deposits) as a choreographed, idempotent follower.
+4. **Recovery.** A scanner re-issues the commands of overdue steps and compensates only where the outcome is known; otherwise it escalates to MANUAL_REVIEW.
 
-   Every step is resumable.
+WP-01's synchronous `authorize`/`process` endpoints were removed (see WP-02-LLD §1).
 
 ## 6. Quality attributes and how they are met
 
@@ -88,11 +86,19 @@ The proposed `VALIDATING` state was dropped: validation is synchronous inside th
 | Observability | ECS JSON logs with traceId, spanId and correlationId; health, liveness and readiness probes; W3C trace context |
 | Governance | 20 ArchUnit rules plus negative tests proving the rules detect violations |
 
-## 7. Roadmap hooks
+## 7. Event backbone (WP-02)
+
+- Kafka 4.2 (KRaft), 7 topics grouped per context: `payment.events`, `{fraud,funds,settlement}.{commands,events}` (KAFKA-TOPIC-CATALOG).
+- Transactional Outbox in payment, account and settlement; polling relay (ADR-009/010).
+- Inbox in payment, account and ledger; natural keys in settlement and fraud (ADR-013).
+- Retry topics and a sanitized DLT per consumer group, plus a replay API (ADR-014).
+- JSON contracts plus schemas as code (ADR-011/016).
+
+## 8. Roadmap hooks
 
 | Extension point | Used by |
 |---|---|
-| `PaymentEventPublisherPort` (called in-transaction) | WP-02 Outbox and Kafka |
-| `LedgerPostingPort`, `FraudAssessmentPort`, `SettlementProviderPort` | WP-02 async and Saga; WP-03 Resilience4j decorators |
+| `PaymentEventPublisherPort` (called in-transaction) | Implemented in WP-02 as the outbox adapter |
+| `SettlementGatewayPort` / `DirectEventPublisher` / relay | WP-03 Resilience4j decorators, batching or CDC |
 | `SettlementGatewayPort` (per rail) | WP-03 circuit breaker, bulkhead, timeout and retry per rail |
 | Readiness groups, tracing export flag | WP-03 SLOs and collectors |

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:PaymentSettled:v1",
+  "title": "PaymentSettled v1",
+  "description": "",
+  "x-topic": "payment.events",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "amount",
+    "currency"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^-?\\d{1,15}(\\.\\d{1,4})?$",
+      "description": "Decimal string; never a JSON number"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    }
+  },
+  "additionalProperties": false
+}

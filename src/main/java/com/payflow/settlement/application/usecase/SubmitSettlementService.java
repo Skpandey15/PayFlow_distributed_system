@@ -1,6 +1,7 @@
 package com.payflow.settlement.application.usecase;
 
 import com.payflow.settlement.application.port.in.SubmitSettlementUseCase;
+import com.payflow.settlement.application.port.out.SettlementEventPublisherPort;
 import com.payflow.settlement.application.port.out.SettlementGatewayPort.GatewayInstruction;
 import com.payflow.settlement.application.port.out.SettlementGatewayPort.GatewayResponse;
 import com.payflow.settlement.application.port.out.SettlementRepositoryPort;
@@ -18,23 +19,27 @@ import java.time.Clock;
  * <pre>
  *   TX1  find-or-create Settlement(PENDING)        -- unique(payment_id) makes this idempotent
  *   ---  gateway.submit(idempotencyKey=paymentId)  -- NO database transaction held open across the network call
- *   TX2  reload, complete/decline, optimistic-lock -- only if still PENDING (a concurrent resumer may have finished)
+ *   TX2  reload, complete/decline, optimistic-lock, outbox SettlementCompleted|Declined (same transaction)
  * </pre>
  *
- * A crash between TX1 and TX2 leaves a PENDING settlement. Calling submit again resumes it with the
- * same provider idempotency key, so the rail deduplicates and money cannot move twice.
+ * A crash between TX1 and TX2 leaves a PENDING settlement. The command is redelivered (offset not committed)
+ * or re-issued by saga recovery, and submit resumes with the same provider idempotency key, so the rail
+ * deduplicates and money cannot move twice. A command for an already-terminal settlement re-announces the
+ * recorded outcome, because the saga that asked again evidently did not receive it.
  */
 public class SubmitSettlementService implements SubmitSettlementUseCase {
 
     private final SettlementRepositoryPort settlements;
     private final SettlementGatewayRouter router;
+    private final SettlementEventPublisherPort events;
     private final TransactionRunner tx;
     private final Clock clock;
 
     public SubmitSettlementService(SettlementRepositoryPort settlements, SettlementGatewayRouter router,
-                                   TransactionRunner tx, Clock clock) {
+                                   SettlementEventPublisherPort events, TransactionRunner tx, Clock clock) {
         this.settlements = settlements;
         this.router = router;
+        this.events = events;
         this.tx = tx;
         this.clock = clock;
     }
@@ -43,7 +48,10 @@ public class SubmitSettlementService implements SubmitSettlementUseCase {
     public SettlementResult submit(SubmitSettlementCommand command) {
         Settlement settlement = findOrCreate(command);
         if (settlement.status().isTerminal()) {
-            return result(settlement);
+            return tx.inTransaction(() -> {
+                events.announceOutcome(settlement);
+                return result(settlement);
+            });
         }
 
         GatewayResponse response = router.gatewayFor(settlement.rail()).submit(new GatewayInstruction(
@@ -58,6 +66,7 @@ public class SubmitSettlementService implements SubmitSettlementUseCase {
                     current.decline(response.declineReason(), clock.instant());
                 }
                 settlements.update(current);
+                events.announceOutcome(current);
             }
             return result(current);
         });

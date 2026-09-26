@@ -4,6 +4,7 @@ import com.payflow.fraud.application.port.in.AssessPaymentRiskUseCase;
 import com.payflow.fraud.application.port.in.GetFraudAssessmentUseCase;
 import com.payflow.fraud.application.port.out.FraudAssessmentRepositoryPort;
 import com.payflow.fraud.application.port.out.FraudAssessmentRepositoryPort.DuplicateAssessmentException;
+import com.payflow.fraud.application.port.out.RiskDecisionPublisherPort;
 import com.payflow.fraud.domain.ChannelContext;
 import com.payflow.fraud.domain.FraudAssessment;
 import com.payflow.fraud.domain.RiskDecision;
@@ -30,23 +31,36 @@ public class FraudAssessmentService implements AssessPaymentRiskUseCase, GetFrau
     public static final String PERMISSION_READ = "fraud:read";
 
     private final FraudAssessmentRepositoryPort assessments;
+    private final RiskDecisionPublisherPort decisions;
     private final RiskScoringPolicy policy;
     private final Duration velocityWindow;
     private final Clock clock;
 
-    public FraudAssessmentService(FraudAssessmentRepositoryPort assessments, RiskScoringPolicy policy,
-                                  Duration velocityWindow, Clock clock) {
+    public FraudAssessmentService(FraudAssessmentRepositoryPort assessments, RiskDecisionPublisherPort decisions,
+                                  RiskScoringPolicy policy, Duration velocityWindow, Clock clock) {
         this.assessments = assessments;
+        this.decisions = decisions;
         this.policy = policy;
         this.velocityWindow = velocityWindow;
         this.clock = clock;
     }
 
+    /**
+     * Assess once, announce every time: a repeated command (redelivery, saga recovery) gets the stored decision
+     * re-published instead of a fresh score, so the decision never flips. Order matters: persist the decision
+     * <em>before</em> publishing it. A crash in between redelivers the command, which then publishes the stored decision.
+     */
     @Override
     public RiskAssessmentView assess(AssessRiskCommand command) {
+        FraudAssessment assessment = assessOnce(command);
+        decisions.publish(assessment);
+        return view(assessment);
+    }
+
+    private FraudAssessment assessOnce(AssessRiskCommand command) {
         var existing = assessments.findByPaymentId(command.paymentId());
         if (existing.isPresent()) {
-            return view(existing.get());
+            return existing.get();
         }
         Instant now = clock.instant();
         long recent = assessments.countByPayerSince(command.payerAccountId(), now.minus(velocityWindow));
@@ -55,10 +69,10 @@ public class FraudAssessmentService implements AssessPaymentRiskUseCase, GetFrau
         FraudAssessment assessment = policy.assess(context, now);
         try {
             assessments.save(assessment);
-            return view(assessment);
+            return assessment;
         } catch (DuplicateAssessmentException raced) {
-            // A concurrent authorization attempt assessed the same payment first; its decision stands.
-            return view(assessments.findByPaymentId(command.paymentId()).orElseThrow());
+            // A concurrent delivery assessed the same payment first; its decision stands.
+            return assessments.findByPaymentId(command.paymentId()).orElseThrow();
         }
     }
 

@@ -1,15 +1,36 @@
 payflow:
   scheduling:
-    enabled: false
+    enabled: true
   security:
     jwt:
       issuer: https://idp.payflow.test/realms/payflow
       audience: payflow-api
+  messaging:
+    topic:
+      partitions: 3
+    outbox:
+      poll-interval-ms: 100
+    retry:
+      # Fast, bounded retries so retry-exhaustion tests finish in about a second.
+      attempts: 3
+      initial-delay-ms: 200
+      multiplier: 2
+      max-delay-ms: 1000
+  saga:
+    # Tests drive recovery explicitly (backdating step_started_at), never on a timer.
+    recovery-interval-ms: 3600000
+
+spring:
+  kafka:
+    listener:
+      concurrency: 2
 
 logging:
   level:
     root: WARN
     com.payflow: INFO
-    payflow.events: WARN
+    payflow: INFO
+    payflow.events.consumer: WARN
+    org.apache.kafka: ERROR
   pattern:
-    console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-}] %logger{36} - %msg%n"
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-}] %logger{36} - %msg %kvp%n"

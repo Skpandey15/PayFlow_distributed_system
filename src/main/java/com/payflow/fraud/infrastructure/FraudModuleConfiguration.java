@@ -1,6 +1,7 @@
 package com.payflow.fraud.infrastructure;
 
 import com.payflow.fraud.application.port.out.FraudAssessmentRepositoryPort;
+import com.payflow.fraud.application.port.out.RiskDecisionPublisherPort;
 import com.payflow.fraud.application.usecase.FraudAssessmentService;
 import com.payflow.fraud.domain.RiskRule;
 import com.payflow.fraud.domain.RiskScoringPolicy;
@@ -37,8 +38,9 @@ class FraudModuleConfiguration {
     }
 
     @Bean
-    FraudAssessmentService fraudAssessmentService(FraudAssessmentRepositoryPort repository, RiskScoringPolicy policy,
+    FraudAssessmentService fraudAssessmentService(FraudAssessmentRepositoryPort repository,
+                                                  RiskDecisionPublisherPort decisions, RiskScoringPolicy policy,
                                                   FraudProperties p, Clock clock) {
-        return new FraudAssessmentService(repository, policy, p.velocityWindow(), clock);
+        return new FraudAssessmentService(repository, decisions, policy, p.velocityWindow(), clock);
     }
 }

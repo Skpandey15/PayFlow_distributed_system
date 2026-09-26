@@ -1,5 +1,9 @@
 # WP-01 Low-Level Design
 
+> **Superseded in part by WP-02.** The synchronous `authorize` and `process` use cases and endpoints (§3, §6, §7) were
+> replaced by the asynchronous orchestrated saga, with funds reservation and Transactional Outbox. See
+> [WP-02-LLD](WP-02-LLD.md) and [SAGA-DESIGN](SAGA-DESIGN.md). Everything else in this document still applies.
+
 ## 1. Code layout
 
 ```

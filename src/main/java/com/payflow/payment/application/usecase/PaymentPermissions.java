@@ -10,8 +10,6 @@ public final class PaymentPermissions {
     public static final String READ = "payments:read";
     /** Create and cancel own payments. */
     public static final String WRITE = "payments:write";
-    /** Drive payments through authorization and settlement (service/operator identity). */
-    public static final String PROCESS = "payments:process";
     /** See every payment regardless of initiator (support/operations). */
     public static final String ADMIN = "payments:admin";
 

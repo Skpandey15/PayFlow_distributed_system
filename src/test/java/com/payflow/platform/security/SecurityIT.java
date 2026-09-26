@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -17,6 +18,7 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -117,11 +119,27 @@ class SecurityIT {
     class LeastPrivilege {
 
         @Test
-        void customersCannotDriveThePaymentLifecycle() throws Exception {
-            api.authorize(alice, alicePayment, "US")
+        void customersCannotUseOperatorCapabilities() throws Exception {
+            mvc.perform(get("/api/v1/payments/{id}/saga", alicePayment).header("Authorization", ApiClient.bearer(alice)))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.code").value("INSUFFICIENT_SCOPE"));
-            api.process(alice, alicePayment).andExpect(status().isForbidden());
+            mvc.perform(post("/api/v1/accounts/{id}/deposits", aliceAccount).header("Authorization", ApiClient.bearer(alice))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"depositId\":\"" + UUID.randomUUID() + "\",\"amount\":\"1000.00\",\"currency\":\"USD\"}"))
+                    .andExpect(status().isForbidden());
+            mvc.perform(post("/api/v1/ops/dead-letters/replay").header("Authorization", ApiClient.bearer(alice))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"dltTopic\":\"funds.commands-account-service-dlt\",\"partition\":0,\"offset\":0}"))
+                    .andExpect(status().isForbidden());
+            mvc.perform(get("/actuator/metrics").header("Authorization", ApiClient.bearer(alice)))
+                    .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void metricsRequireTheOpsMetricsScope() throws Exception {
+            mvc.perform(get("/actuator/metrics/payflow.outbox.backlog")
+                            .header("Authorization", ApiClient.bearer(TestJwt.token("sre-1", "ops:metrics"))))
+                    .andExpect(status().isOk());
         }
 
         @Test
@@ -132,9 +150,8 @@ class SecurityIT {
         }
 
         @Test
-        void processorIdentityCannotReadCustomerPayments() throws Exception {
-            api.getPayment(TestJwt.token("svc-orchestrator", Actors.PROCESSOR_SCOPES), alicePayment)
-                    .andExpect(status().isForbidden());
+        void treasuryIdentityCannotReadCustomerPayments() throws Exception {
+            api.getPayment(ApiClient.TREASURY, alicePayment).andExpect(status().isForbidden());
         }
 
         @Test

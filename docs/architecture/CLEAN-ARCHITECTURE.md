@@ -22,7 +22,7 @@ CreatePaymentService ──uses──▶ PaymentRepositoryPort   (interface, app
                          JpaPaymentRepositoryAdapter ──▶ Spring Data JPA ──▶ PostgreSQL
 ```
 
-`ProcessPaymentService` depends on `SettlementProviderPort`, not on the Settlement context. The implementation (`SettlementContextAdapter`) is an Anti-Corruption Layer. Tomorrow it could be an HTTP client or a Kafka producer.
+`PaymentSagaService` depends on `SagaCommandPort`, not on Kafka or on the other contexts. In WP-01 the implementation was an in-process Anti-Corruption Layer; in WP-02 it became `OutboxSagaCommandPublisher` (Transactional Outbox → Kafka) **without any change to the use case**. That swap is the concrete payoff of Dependency Inversion.
 
 ## Rules enforced by ArchUnit (`ArchitectureTest`)
 
@@ -50,6 +50,19 @@ CreatePaymentService ──uses──▶ PaymentRepositoryPort   (interface, app
 | 20 | no `@Autowired` field injection; `@Entity` fields not public | explicit, testable dependencies |
 
 `ArchitectureRulesDetectViolationsTest` runs rules 1, 6, 11 and 18 against deliberately violating fixtures (`com.payflow.archfixture`) and asserts that they **fail**. This prevents the classic failure mode of rules that pass because their package pattern matches nothing.
+
+## WP-02 rules (event backbone)
+
+| Rule | Why it matters |
+|---|---|
+| domain + application do not depend on contracts, platform.messaging, Spring Kafka or Kafka clients | the core stays unaware of topics, envelopes, offsets and retries |
+| `@KafkaListener` methods only in `..adapter.in.messaging..` | consuming is an inbound adapter that calls application ports |
+| only `platform.messaging` depends on `KafkaTemplate` | contexts publish through the outbox or `DirectEventPublisher`, never ad hoc |
+| web controllers never depend on Kafka, messaging or contracts | HTTP changes state via use cases; events are a consequence |
+| `contracts` depends only on `java..` | the published language leaks nothing |
+| outbound messaging adapters never depend on `@Entity` | events are contracts, not serialized entities |
+
+Negative fixtures (`KafkaAwareDomainObject`, `PublishingController`) prove these rules fail when violated. Total: 26 rules.
 
 ## Clean vs Hexagonal vs Onion, as used here
 

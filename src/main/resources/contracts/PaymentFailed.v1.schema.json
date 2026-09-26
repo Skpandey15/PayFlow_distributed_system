@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:PaymentFailed:v1",
+  "title": "PaymentFailed v1",
+  "description": "",
+  "x-topic": "payment.events",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "reason"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

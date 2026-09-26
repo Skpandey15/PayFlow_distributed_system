@@ -2,6 +2,7 @@ package com.payflow.payment.adapter.in.web;
 
 import com.payflow.payment.domain.PaymentMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -27,5 +28,14 @@ public record CreatePaymentRequest(
         @Schema(example = "USD")
         String currency,
         @NotNull PaymentMethod method,
-        @Size(max = 140) String reference) {
+        @Size(max = 140) String reference,
+        @Valid Checkout checkout) {
+
+    /** Optional checkout evidence forwarded (only) to fraud assessment. */
+    public record Checkout(
+            @Size(max = 128) String deviceId,
+            @Size(max = 45) String ipAddress,
+            @Size(max = 512) String userAgent,
+            @Pattern(regexp = "^[A-Z]{2}$", message = "must be an ISO-3166 alpha-2 code") String countryCode) {
+    }
 }

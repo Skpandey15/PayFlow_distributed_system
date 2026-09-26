@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:PaymentCreated:v1",
+  "title": "PaymentCreated v1",
+  "description": "A payment was accepted (status CREATED).",
+  "x-topic": "payment.events",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "payerAccountId",
+    "payeeAccountId",
+    "amount",
+    "currency",
+    "method"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payerAccountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payeeAccountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^-?\\d{1,15}(\\.\\d{1,4})?$",
+      "description": "Decimal string; never a JSON number"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "method": {
+      "enum": [
+        "CARD",
+        "UPI",
+        "BANK_TRANSFER"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

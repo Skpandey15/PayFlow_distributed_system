@@ -1,16 +1,21 @@
 package com.payflow.account.adapter.in.web;
 
 import com.payflow.account.application.port.in.AccountView;
+import com.payflow.account.application.port.in.DepositFundsUseCase;
+import com.payflow.account.application.port.in.DepositFundsUseCase.DepositCommand;
+import com.payflow.account.application.port.in.DepositFundsUseCase.DepositResult;
 import com.payflow.account.application.port.in.FreezeAccountUseCase;
 import com.payflow.account.application.port.in.GetAccountUseCase;
 import com.payflow.account.application.port.in.OpenAccountUseCase;
 import com.payflow.account.application.port.in.OpenAccountUseCase.OpenAccountCommand;
 import com.payflow.shared.application.Actor;
 import com.payflow.shared.domain.AccountId;
+import com.payflow.shared.domain.Money;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.MediaType;
@@ -34,11 +39,14 @@ class AccountController {
     private final OpenAccountUseCase openAccount;
     private final GetAccountUseCase getAccount;
     private final FreezeAccountUseCase freezeAccount;
+    private final DepositFundsUseCase depositFunds;
 
-    AccountController(OpenAccountUseCase openAccount, GetAccountUseCase getAccount, FreezeAccountUseCase freezeAccount) {
+    AccountController(OpenAccountUseCase openAccount, GetAccountUseCase getAccount, FreezeAccountUseCase freezeAccount,
+                      DepositFundsUseCase depositFunds) {
         this.openAccount = openAccount;
         this.getAccount = getAccount;
         this.freezeAccount = freezeAccount;
+        this.depositFunds = depositFunds;
     }
 
     record OpenAccountRequest(@NotBlank @Size(max = 100) String displayName,
@@ -46,11 +54,17 @@ class AccountController {
     }
 
     record AccountResponse(UUID id, String ownerSubject, String displayName, String currency, String status,
-                           Instant createdAt, Instant updatedAt) {
+                           String availableBalance, String reservedBalance, Instant createdAt, Instant updatedAt) {
         static AccountResponse from(AccountView v) {
             return new AccountResponse(v.id(), v.ownerSubject(), v.displayName(), v.currency(), v.status(),
-                    v.createdAt(), v.updatedAt());
+                    v.availableBalance(), v.reservedBalance(), v.createdAt(), v.updatedAt());
         }
+    }
+
+    /** {@code depositId} is client-generated: retrying the same deposit is safe (idempotent). */
+    record DepositRequest(@NotNull UUID depositId,
+                          @NotBlank @Pattern(regexp = "^\\d{1,15}(\\.\\d{1,4})?$") String amount,
+                          @NotBlank @Pattern(regexp = "^[A-Z]{3}$") String currency) {
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -64,6 +78,15 @@ class AccountController {
     @Operation(summary = "Get an account owned by the caller")
     AccountResponse get(Actor actor, @PathVariable UUID accountId) {
         return AccountResponse.from(getAccount.get(actor, new AccountId(accountId)));
+    }
+
+    @PostMapping(path = "/{accountId}/deposits", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Credit funds to an account (treasury; requires funds:deposit)")
+    ResponseEntity<AccountResponse> deposit(Actor actor, @PathVariable UUID accountId,
+                                            @Valid @RequestBody DepositRequest request) {
+        DepositResult result = depositFunds.deposit(new DepositCommand(actor, new AccountId(accountId),
+                request.depositId(), Money.of(request.amount(), request.currency())));
+        return ResponseEntity.status(result.replayed() ? 200 : 201).body(AccountResponse.from(result.account()));
     }
 
     @PostMapping("/{accountId}/freeze")
