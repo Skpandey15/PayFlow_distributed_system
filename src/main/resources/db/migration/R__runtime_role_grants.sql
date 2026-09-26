@@ -1,10 +1,13 @@
 -- Least privilege (Zero Trust): Flyway migrates as the schema OWNER, while the application connects as a
 -- separate runtime role that can only do DML, and only the DML each table needs. A compromised application
--- therefore cannot DROP/ALTER tables or rewrite the ledger. The UPDATE/DELETE privileges are absent on
--- ledger.*, on top of the append-only triggers.
+-- therefore cannot DROP/ALTER tables or rewrite the ledger. The UPDATE/DELETE privileges are absent on the
+-- ledger journal tables, on top of the append-only triggers.
 --
--- The block is a no-op when the runtime role does not exist (e.g. Testcontainers, where a single
--- user runs everything), so the same migrations work in every environment.
+-- The block is a no-op when the runtime role does not exist (e.g. Testcontainers, where a single user runs
+-- everything), so the same migrations work in every environment.
+--
+-- Maintenance rule: edit this file (changing its checksum) whenever a migration adds a table, so Flyway re-applies it.
+-- Revision: WP-02 (funds, outbox/inbox, payment saga).
 DO
 $$
 DECLARE
@@ -17,10 +20,24 @@ BEGIN
 
     EXECUTE format('GRANT USAGE ON SCHEMA account, payment, ledger, settlement TO %I', runtime_role);
 
+    -- Account: master data, balances, reservations, deposits, outbox and inbox.
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA account TO %I', runtime_role);
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE ON payment.payment TO %I', runtime_role);
-    EXECUTE format('GRANT SELECT, INSERT, DELETE ON payment.idempotency_record TO %I', runtime_role);
+    EXECUTE format('GRANT DELETE ON account.outbox_event, account.processed_event TO %I', runtime_role);
+
+    -- Payment: payments, sagas, idempotency, outbox and inbox.
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE ON payment.payment, payment.payment_saga, payment.outbox_event TO %I', runtime_role);
+    EXECUTE format('GRANT SELECT, INSERT, DELETE ON payment.idempotency_record, payment.processed_event TO %I', runtime_role);
+    EXECUTE format('GRANT DELETE ON payment.outbox_event TO %I', runtime_role);
+
+    -- Settlement.
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA settlement TO %I', runtime_role);
+    EXECUTE format('GRANT DELETE ON settlement.outbox_event TO %I', runtime_role);
+
+    -- Ledger: append-only journal (no UPDATE/DELETE), inbox with purge.
     EXECUTE format('GRANT SELECT, INSERT ON ALL TABLES IN SCHEMA ledger TO %I', runtime_role);
+    EXECUTE format('GRANT DELETE ON ledger.processed_event TO %I', runtime_role);
+
+    -- BIGSERIAL outbox ids.
+    EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA account, payment, settlement TO %I', runtime_role);
 END;
 $$;

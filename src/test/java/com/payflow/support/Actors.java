@@ -8,17 +8,12 @@ import java.util.Set;
 public final class Actors {
 
     public static final String CUSTOMER_SCOPES = "payments:read payments:write accounts:read accounts:write";
-    public static final String PROCESSOR_SCOPES = "payments:process";
 
     private Actors() {
     }
 
     public static Actor customer(String subject) {
         return new Actor(subject, Set.of("payments:read", "payments:write", "accounts:read", "accounts:write"));
-    }
-
-    public static Actor processor() {
-        return new Actor("svc-payment-orchestrator", Set.of("payments:process"));
     }
 
     public static Actor ledgerReader() {

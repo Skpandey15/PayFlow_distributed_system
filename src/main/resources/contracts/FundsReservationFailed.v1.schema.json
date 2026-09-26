@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:FundsReservationFailed:v1",
+  "title": "FundsReservationFailed v1",
+  "description": "",
+  "x-topic": "funds.events",
+  "x-producer": "account-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "reason"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

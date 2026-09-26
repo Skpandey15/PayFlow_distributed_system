@@ -4,10 +4,10 @@
 
 | Context | Store | Objects | Owner role |
 |---|---|---|---|
-| Account | PostgreSQL | `account.account` | payflow_migrator (DDL) / payflow_app (DML) |
-| Payment | PostgreSQL | `payment.payment`, `payment.idempotency_record` | same |
-| Ledger | PostgreSQL | `ledger.journal_entry`, `ledger.ledger_entry` (append-only) | same; runtime role has SELECT and INSERT only |
-| Settlement | PostgreSQL | `settlement.settlement` | same |
+| Account | PostgreSQL | `account.account`, `account.account_balance`, `account.funds_reservation`, `account.funds_deposit`, `account.outbox_event`, `account.processed_event` | payflow_migrator (DDL) / payflow_app (DML) |
+| Payment | PostgreSQL | `payment.payment`, `payment.idempotency_record`, `payment.payment_saga`, `payment.outbox_event`, `payment.processed_event` | same |
+| Ledger | PostgreSQL | `ledger.journal_entry`, `ledger.ledger_entry` (append-only), `ledger.processed_event` | same; runtime role has SELECT and INSERT only (+ DELETE on the inbox for purge) |
+| Settlement | PostgreSQL | `settlement.settlement`, `settlement.outbox_event` | same |
 | Fraud | MongoDB | `payflow_fraud.fraud_assessments` | payflow_fraud_app (readWrite, one database) |
 
 Rules:
@@ -65,7 +65,7 @@ A `version BIGINT` column on payment, account and settlement, handled with JPA `
 |---|---|
 | `payment_attempt` | Settlement already records the attempt, and retries reuse it through idempotency keys. Multiple attempts per payment (for example cascading rails) are WP-03 |
 | `refund` | A new lifecycle (partial refunds, reversal journals). Out of WP-01 scope; the ledger's compensating-entry model is ready for it |
-| `outbox` | WP-02 (Transactional Outbox) |
+| `outbox` | Delivered in WP-02 (V6) |
 
 ## Consistency model
 
@@ -74,10 +74,26 @@ A `version BIGINT` column on payment, account and settlement, handled with JPA `
 | Inside a context | strong (ACID), with READ COMMITTED plus constraints and version checks |
 | Across contexts or stores | eventual, with idempotent steps that can be re-driven. There is no XA/2PC (ADR-004). WP-02 automates convergence with the Outbox and Sagas |
 
+## WP-02 additions
+
+| Table | Key constraints | Purpose |
+|---|---|---|
+| `account.account_balance` | PK account_id; `CHECK available >= 0`, `CHECK reserved >= 0` | spendable vs held funds; row lock per mutation |
+| `account.funds_reservation` | UNIQUE payment_id; status CHECK | one hold per payment; tombstone support |
+| `account.funds_deposit` | PK = client depositId | idempotent deposits |
+| `<ctx>.outbox_event` | BIGSERIAL id (publication order); UNIQUE event_id; partial index on unpublished rows | Transactional Outbox |
+| `<ctx>.processed_event` | PK (consumer, event_id) | inbox / idempotent consumer |
+| `payment.payment_saga` | UNIQUE payment_id; step CHECK; partial index on in-flight steps | orchestration state and recovery scan |
+
+The reconciliation invariant for customer accounts, once the ledger has caught up, is `ledger balance = available + reserved`. It is asserted in `PaymentApiIT` and was observed live.
+
 ## Retention
 
 | Data | Retention |
 |---|---|
 | Idempotency records | at least 24h, purged hourly |
+| Outbox rows (published) | 7 days, then purged |
+| Inbox rows | 7 days (dedup window; natural keys beyond it) |
+| Kafka topics / DLTs | 7 days |
 | Ledger | forever (append-only) |
 | Fraud assessments | policy to be defined with compliance. A TTL index would be the mechanism |

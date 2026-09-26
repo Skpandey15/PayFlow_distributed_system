@@ -1,5 +1,8 @@
 package com.payflow.settlement.infrastructure;
 
+import com.payflow.platform.messaging.outbox.OutboxRelay;
+import com.payflow.platform.messaging.outbox.OutboxRelayFactory;
+import com.payflow.settlement.application.port.out.SettlementEventPublisherPort;
 import com.payflow.settlement.application.port.out.SettlementGatewayPort;
 import com.payflow.settlement.application.port.out.SettlementRepositoryPort;
 import com.payflow.settlement.application.usecase.SettlementGatewayRouter;
@@ -14,7 +17,7 @@ import java.util.List;
 @Configuration(proxyBeanMethods = false)
 class SettlementModuleConfiguration {
 
-    /** All rail adapters on the classpath are collected here. The router fails startup if a rail is missing. */
+    /** All rail adapters on the classpath are collected here; the router fails startup if a rail is missing. */
     @Bean
     SettlementGatewayRouter settlementGatewayRouter(List<SettlementGatewayPort> gateways) {
         return new SettlementGatewayRouter(gateways);
@@ -22,7 +25,13 @@ class SettlementModuleConfiguration {
 
     @Bean
     SubmitSettlementService submitSettlementService(SettlementRepositoryPort settlements, SettlementGatewayRouter router,
-                                                    TransactionRunner tx, Clock clock) {
-        return new SubmitSettlementService(settlements, router, tx, clock);
+                                                    SettlementEventPublisherPort events, TransactionRunner tx,
+                                                    Clock clock) {
+        return new SubmitSettlementService(settlements, router, events, tx, clock);
+    }
+
+    @Bean
+    OutboxRelay settlementOutboxRelay(OutboxRelayFactory relays) {
+        return relays.forTable("settlement.outbox_event");
     }
 }

@@ -11,6 +11,8 @@ import jakarta.persistence.Entity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.repository.Repository;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
@@ -20,6 +22,7 @@ import java.util.List;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
 import static com.tngtech.archunit.library.Architectures.onionArchitecture;
@@ -43,7 +46,8 @@ class ArchitectureTest {
     private static final String[] FRAMEWORKS = {
             "org.springframework..", "jakarta.persistence..", "org.hibernate..", "org.bson..", "com.mongodb..",
             "jakarta.servlet..", "jakarta.validation..", "tools.jackson..", "com.fasterxml.jackson..",
-            "io.swagger..", "org.slf4j..", "org.apache.kafka..", "io.github.resilience4j.."};
+            "io.swagger..", "org.slf4j..", "org.apache.kafka..", "io.github.resilience4j..",
+            "io.lettuce..", "redis.clients..", "io.confluent..", "io.micrometer.."};
 
     // ---------------------------------------------------------------- Clean Architecture layering
 
@@ -190,6 +194,50 @@ class ArchitectureTest {
     static final ArchRule contexts_are_free_of_cycles = slices()
             .matching("com.payflow.(*)..")
             .should().beFreeOfCycles();
+
+    // ---------------------------------------------------------------- Event backbone (WP-02)
+
+    @ArchTest
+    static final ArchRule core_does_not_know_messaging = noClasses()
+            .that().resideInAnyPackage("com.payflow..domain..", "com.payflow..application..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.payflow.contracts..", "com.payflow.platform.messaging..", "org.springframework.kafka..",
+                    "org.apache.kafka..")
+            .because("Kafka, envelopes, offsets, retry topics and wire contracts are adapter concerns; use cases talk "
+                    + "to ports (PaymentEventPublisherPort, SagaCommandPort, ...)");
+
+    @ArchTest
+    static final ArchRule kafka_listeners_live_in_inbound_messaging_adapters = methods()
+            .that().areAnnotatedWith(KafkaListener.class)
+            .should().beDeclaredInClassesThat().resideInAPackage("com.payflow..adapter.in.messaging..")
+            .because("consuming is an inbound adapter: it must translate, then call an application port");
+
+    @ArchTest
+    static final ArchRule only_the_platform_touches_the_kafka_producer = noClasses()
+            .that().resideOutsideOfPackage("com.payflow.platform.messaging..")
+            .should().dependOnClassesThat().areAssignableTo(KafkaTemplate.class)
+            .because("contexts publish through the outbox (OutboxWriter) or DirectEventPublisher, never ad hoc");
+
+    @ArchTest
+    static final ArchRule web_controllers_never_publish_events = noClasses()
+            .that().resideInAPackage("com.payflow..adapter.in.web..")
+            .and().resideOutsideOfPackage("com.payflow.platform..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "org.springframework.kafka..", "org.apache.kafka..", "com.payflow.platform.messaging..",
+                    "com.payflow.contracts..")
+            .because("an HTTP request changes state through a use case; events are a consequence, written to the outbox");
+
+    @ArchTest
+    static final ArchRule contracts_are_plain_java = classes()
+            .that().resideInAPackage("com.payflow.contracts..")
+            .should().onlyDependOnClassesThat().resideInAnyPackage("java..", "com.payflow.contracts..")
+            .because("the published language must not leak JPA entities, domain types or frameworks");
+
+    @ArchTest
+    static final ArchRule outbound_messaging_adapters_use_published_contracts = noClasses()
+            .that().resideInAPackage("com.payflow..adapter.out.messaging..")
+            .should().dependOnClassesThat().areAnnotatedWith(Entity.class)
+            .because("events are integration contracts, never serialized persistence entities");
 
     // ---------------------------------------------------------------- Money and coding standards
 

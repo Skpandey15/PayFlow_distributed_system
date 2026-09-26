@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:CaptureFunds:v1",
+  "title": "CaptureFunds v1",
+  "description": "",
+  "x-topic": "funds.commands",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "additionalProperties": false
+}

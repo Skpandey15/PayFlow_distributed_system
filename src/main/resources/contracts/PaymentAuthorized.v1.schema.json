@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:PaymentAuthorized:v1",
+  "title": "PaymentAuthorized v1",
+  "description": "",
+  "x-topic": "payment.events",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "additionalProperties": false
+}

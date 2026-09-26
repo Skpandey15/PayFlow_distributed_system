@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:ReserveFunds:v1",
+  "title": "ReserveFunds v1",
+  "description": "",
+  "x-topic": "funds.commands",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "payerAccountId",
+    "payeeAccountId",
+    "amount",
+    "currency"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payerAccountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "payeeAccountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^-?\\d{1,15}(\\.\\d{1,4})?$",
+      "description": "Decimal string; never a JSON number"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    }
+  },
+  "additionalProperties": false
+}

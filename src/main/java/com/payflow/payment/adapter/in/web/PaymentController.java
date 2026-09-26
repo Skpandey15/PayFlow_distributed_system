@@ -1,17 +1,17 @@
 package com.payflow.payment.adapter.in.web;
 
-import com.payflow.payment.application.port.in.AuthorizePaymentUseCase;
-import com.payflow.payment.application.port.in.AuthorizePaymentUseCase.AuthorizePaymentCommand;
-import com.payflow.payment.application.port.in.AuthorizePaymentUseCase.CheckoutChannel;
 import com.payflow.payment.application.port.in.CancelPaymentUseCase;
 import com.payflow.payment.application.port.in.CreatePaymentUseCase;
 import com.payflow.payment.application.port.in.CreatePaymentUseCase.CreatePaymentCommand;
 import com.payflow.payment.application.port.in.CreatePaymentUseCase.CreatePaymentResult;
+import com.payflow.payment.application.port.in.GetPaymentSagaUseCase;
+import com.payflow.payment.application.port.in.GetPaymentSagaUseCase.SagaView;
 import com.payflow.payment.application.port.in.GetPaymentUseCase;
 import com.payflow.payment.application.port.in.ListPaymentsUseCase;
-import com.payflow.payment.application.port.in.ProcessPaymentUseCase;
 import com.payflow.payment.domain.PaymentId;
 import com.payflow.payment.domain.PaymentStatus;
+import com.payflow.payment.domain.saga.CheckoutContext;
+import com.payflow.platform.observability.CorrelationIdFilter;
 import com.payflow.platform.web.PageResponse;
 import com.payflow.shared.application.Actor;
 import com.payflow.shared.application.PageQuery;
@@ -56,33 +56,37 @@ class PaymentController {
     private final GetPaymentUseCase getPayment;
     private final ListPaymentsUseCase listPayments;
     private final CancelPaymentUseCase cancelPayment;
-    private final AuthorizePaymentUseCase authorizePayment;
-    private final ProcessPaymentUseCase processPayment;
+    private final GetPaymentSagaUseCase getPaymentSaga;
 
     PaymentController(CreatePaymentUseCase createPayment, GetPaymentUseCase getPayment,
                       ListPaymentsUseCase listPayments, CancelPaymentUseCase cancelPayment,
-                      AuthorizePaymentUseCase authorizePayment, ProcessPaymentUseCase processPayment) {
+                      GetPaymentSagaUseCase getPaymentSaga) {
         this.createPayment = createPayment;
         this.getPayment = getPayment;
         this.listPayments = listPayments;
         this.cancelPayment = cancelPayment;
-        this.authorizePayment = authorizePayment;
-        this.processPayment = processPayment;
+        this.getPaymentSaga = getPaymentSaga;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Create a payment (idempotent per Idempotency-Key)",
-            description = "Replays of the same key and payload return 201 with the original payment and "
-                    + "`Idempotent-Replayed: true`. Reusing a key with a different payload returns 422.")
+    @Operation(summary = "Create a payment (idempotent per Idempotency-Key); processing continues asynchronously",
+            description = "Returns 201 with status CREATED once the payment and its workflow are durably recorded. "
+                    + "Risk assessment, funds reservation, settlement and capture then run as a saga; poll GET "
+                    + "for the final status. Replays of the same key and payload return 201 with the original "
+                    + "payment and `Idempotent-Replayed: true`. Reusing a key with a different payload returns 422.")
     ResponseEntity<PaymentResponse> create(
             Actor actor,
             @Parameter(description = "Client-generated unique key, e.g. a UUID. Retention: at least 24h.")
             @RequestHeader(IDEMPOTENCY_KEY) @NotBlank @Size(max = 255) @Pattern(regexp = "^[A-Za-z0-9._:-]+$")
             String idempotencyKey,
             @Valid @RequestBody CreatePaymentRequest request) {
+        CreatePaymentRequest.Checkout c = request.checkout();
+        CheckoutContext checkout = c == null ? CheckoutContext.NONE
+                : new CheckoutContext(c.deviceId(), c.ipAddress(), c.userAgent(), c.countryCode());
         CreatePaymentResult result = createPayment.create(new CreatePaymentCommand(actor, idempotencyKey,
                 new AccountId(request.payerAccountId()), new AccountId(request.payeeAccountId()),
-                Money.of(request.amount(), request.currency()), request.method(), request.reference()));
+                Money.of(request.amount(), request.currency()), request.method(), request.reference(), checkout,
+                CorrelationIdFilter.current()));
         PaymentResponse body = PaymentResponse.from(result.payment());
         return ResponseEntity.created(URI.create("/api/v1/payments/" + body.id()))
                 .header(IDEMPOTENT_REPLAYED, Boolean.toString(result.replayed()))
@@ -110,19 +114,9 @@ class PaymentController {
         return PaymentResponse.from(cancelPayment.cancel(actor, new PaymentId(paymentId)));
     }
 
-    @PostMapping("/{paymentId}/authorize")
-    @Operation(summary = "Run eligibility and risk checks (requires payments:process)")
-    PaymentResponse authorize(Actor actor, @PathVariable UUID paymentId,
-                              @Valid @RequestBody(required = false) AuthorizePaymentRequest request) {
-        CheckoutChannel channel = request == null ? null
-                : new CheckoutChannel(request.deviceId(), request.ipAddress(), request.userAgent(), request.countryCode());
-        return PaymentResponse.from(authorizePayment.authorize(
-                new AuthorizePaymentCommand(actor, new PaymentId(paymentId), channel)));
-    }
-
-    @PostMapping("/{paymentId}/process")
-    @Operation(summary = "Submit an authorized payment for settlement (resumable, requires payments:process)")
-    PaymentResponse process(Actor actor, @PathVariable UUID paymentId) {
-        return PaymentResponse.from(processPayment.process(actor, new PaymentId(paymentId)));
+    @GetMapping("/{paymentId}/saga")
+    @Operation(summary = "Workflow state of a payment, for operators debugging stuck payments (requires payments:admin)")
+    SagaView saga(Actor actor, @PathVariable UUID paymentId) {
+        return getPaymentSaga.get(actor, new PaymentId(paymentId));
     }
 }

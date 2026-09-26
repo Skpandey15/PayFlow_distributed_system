@@ -9,8 +9,11 @@ import com.payflow.payment.application.port.out.IdempotencyStorePort.Idempotency
 import com.payflow.payment.application.port.out.IdempotencyStorePort.IdempotencyRecord;
 import com.payflow.payment.application.port.out.PaymentEventPublisherPort;
 import com.payflow.payment.application.port.out.PaymentRepositoryPort;
+import com.payflow.payment.application.port.out.PaymentSagaRepositoryPort;
+import com.payflow.payment.application.port.out.SagaCommandPort;
 import com.payflow.payment.domain.Payment;
 import com.payflow.payment.domain.PaymentId;
+import com.payflow.payment.domain.saga.PaymentSaga;
 import com.payflow.shared.application.NotFoundException;
 import com.payflow.shared.application.TransactionRunner;
 import com.payflow.shared.application.UnprocessableException;
@@ -31,8 +34,9 @@ import static com.payflow.shared.application.ForbiddenException.requirePermissio
  * 3. BEGIN
  *      INSERT payment
  *      INSERT idempotency_record            -- PK(client_id, idempotency_key)
- *      publish PaymentCreated (in-tx port; WP-02 outbox)
- *    COMMIT
+ *      INSERT payment_saga (AWAITING_RISK)
+ *      INSERT outbox: PaymentCreated, AssessPaymentRisk   -- Transactional Outbox, same transaction
+ *    COMMIT                                 -- everything after this is asynchronous (saga)
  * 4. on unique violation in step 3         -> a concurrent duplicate won; its row is committed; replay it
  * </pre>
  *
@@ -46,17 +50,22 @@ public class CreatePaymentService implements CreatePaymentUseCase {
     private final PaymentRepositoryPort payments;
     private final IdempotencyStorePort idempotency;
     private final AccountLookupPort accounts;
+    private final PaymentSagaRepositoryPort sagas;
+    private final SagaCommandPort commands;
     private final PaymentEventPublisherPort events;
     private final TransactionRunner tx;
     private final Clock clock;
     private final Duration idempotencyRetention;
 
     public CreatePaymentService(PaymentRepositoryPort payments, IdempotencyStorePort idempotency,
-                                AccountLookupPort accounts, PaymentEventPublisherPort events, TransactionRunner tx,
-                                Clock clock, Duration idempotencyRetention) {
+                                AccountLookupPort accounts, PaymentSagaRepositoryPort sagas, SagaCommandPort commands,
+                                PaymentEventPublisherPort events, TransactionRunner tx, Clock clock,
+                                Duration idempotencyRetention) {
         this.payments = payments;
         this.idempotency = idempotency;
         this.accounts = accounts;
+        this.sagas = sagas;
+        this.commands = commands;
         this.events = events;
         this.tx = tx;
         this.clock = clock;
@@ -85,7 +94,11 @@ public class CreatePaymentService implements CreatePaymentUseCase {
                 payments.add(payment);
                 idempotency.add(new IdempotencyRecord(clientId, command.idempotencyKey(), fingerprint,
                         payment.id(), now, now.plus(idempotencyRetention)));
+                PaymentSaga saga = PaymentSaga.start(payment.id(), correlationId(command, payment),
+                        command.checkout(), now);
+                sagas.add(saga);
                 events.publish(payment.pullEvents());
+                commands.requestRiskAssessment(payment, saga);
                 return new CreatePaymentResult(PaymentView.from(payment), false);
             });
         } catch (IdempotencyKeyConflictException concurrentDuplicate) {
@@ -94,6 +107,11 @@ public class CreatePaymentService implements CreatePaymentUseCase {
                             "Idempotency conflict reported but no committed record found", concurrentDuplicate));
             return replay(winner, fingerprint);
         }
+    }
+
+    private static String correlationId(CreatePaymentCommand command, Payment payment) {
+        return command.correlationId() != null && !command.correlationId().isBlank()
+                ? command.correlationId() : payment.id().toString();
     }
 
     private CreatePaymentResult replay(IdempotencyRecord record, String fingerprint) {

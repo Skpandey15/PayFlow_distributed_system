@@ -16,6 +16,6 @@ import java.lang.annotation.Target;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({TestcontainersConfiguration.class, TestJwt.class})
+@Import({TestcontainersConfiguration.class, TestJwt.class, TestMessagingConfiguration.class})
 public @interface IntegrationTest {
 }

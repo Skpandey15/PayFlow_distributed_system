@@ -5,8 +5,10 @@ import com.payflow.account.application.port.in.FreezeAccountUseCase;
 import com.payflow.account.application.port.in.GetAccountUseCase;
 import com.payflow.account.application.port.in.LookupAccountUseCase;
 import com.payflow.account.application.port.in.OpenAccountUseCase;
+import com.payflow.account.application.port.out.AccountBalanceRepositoryPort;
 import com.payflow.account.application.port.out.AccountRepositoryPort;
 import com.payflow.account.domain.Account;
+import com.payflow.account.domain.AccountBalance;
 import com.payflow.shared.application.Actor;
 import com.payflow.shared.application.NotFoundException;
 import com.payflow.shared.application.TransactionRunner;
@@ -26,11 +28,14 @@ import static com.payflow.shared.application.ForbiddenException.requirePermissio
 public class AccountService implements OpenAccountUseCase, GetAccountUseCase, FreezeAccountUseCase, LookupAccountUseCase {
 
     private final AccountRepositoryPort accounts;
+    private final AccountBalanceRepositoryPort balances;
     private final TransactionRunner tx;
     private final Clock clock;
 
-    public AccountService(AccountRepositoryPort accounts, TransactionRunner tx, Clock clock) {
+    public AccountService(AccountRepositoryPort accounts, AccountBalanceRepositoryPort balances, TransactionRunner tx,
+                          Clock clock) {
         this.accounts = accounts;
+        this.balances = balances;
         this.tx = tx;
         this.clock = clock;
     }
@@ -40,20 +45,24 @@ public class AccountService implements OpenAccountUseCase, GetAccountUseCase, Fr
         requirePermission(command.actor(), AccountPermissions.WRITE);
         Account account = Account.open(AccountId.newId(), command.actor().subject(), command.displayName(),
                 Money.currency(command.currencyCode()), clock.instant());
+        AccountBalance balance = AccountBalance.open(account.id(), account.currency(), account.createdAt());
         tx.inTransaction(() -> {
             accounts.add(account);
+            balances.add(balance);
             return null;
         });
-        return AccountView.from(account);
+        return AccountView.from(account, balance);
     }
 
     @Override
     public AccountView get(Actor actor, AccountId accountId) {
         requirePermission(actor, AccountPermissions.READ);
-        Account account = tx.readOnly(() -> accounts.findById(accountId))
-                .filter(a -> a.isOwnedBy(actor.subject()) || actor.hasPermission(AccountPermissions.ADMIN))
-                .orElseThrow(() -> notFound(accountId));
-        return AccountView.from(account);
+        return tx.readOnly(() -> {
+            Account account = accounts.findById(accountId)
+                    .filter(a -> a.isOwnedBy(actor.subject()) || actor.hasPermission(AccountPermissions.ADMIN))
+                    .orElseThrow(() -> notFound(accountId));
+            return AccountView.from(account, balances.find(accountId).orElseThrow());
+        });
     }
 
     @Override
@@ -63,7 +72,7 @@ public class AccountService implements OpenAccountUseCase, GetAccountUseCase, Fr
             Account account = accounts.findById(accountId).orElseThrow(() -> notFound(accountId));
             account.freeze(clock.instant());
             accounts.update(account);
-            return AccountView.from(account);
+            return AccountView.from(account, balances.find(accountId).orElseThrow());
         });
     }
 

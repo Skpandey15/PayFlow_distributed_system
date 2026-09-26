@@ -28,8 +28,10 @@ Every request is checked for:
 | Identity | Client | Scopes |
 |---|---|---|
 | Customer (alice/bob) | `payflow-customer-app` (public, PKCE) | payments:read/write, accounts:read/write |
-| Payment orchestrator | `payflow-orchestrator` (client credentials) | payments:process **only** (cannot even read payments) |
-| Ops / reconciliation | `payflow-ops` (client credentials) | payments:read/admin, accounts:read/admin, ledger:read, fraud:read |
+| Treasury funding | `payflow-treasury` (client credentials) | funds:deposit **only** (cannot read payments) |
+| Ops / reconciliation | `payflow-ops` (client credentials) | payments:read/admin, accounts:read/admin, ledger:read, fraud:read, ops:dlq-replay, ops:metrics |
+
+WP-02 removed the WP-01 `payflow-orchestrator` client and the `payments:process` scope. The payment workflow is now driven by the saga over Kafka, not by an HTTP caller.
 
 Other controls:
 - **Object-level authorisation** in the use cases, not only at the edge:
@@ -57,7 +59,30 @@ Other controls:
 - Idempotency keys are namespaced per subject, so one client cannot discover another client's keys or payments.
 - Fraud evidence contains IP addresses and device ids (personal data), so it is readable only with `fraud:read`.
 
-## 4. Deliberately deferred (WP-02/03 and platform WPs)
+## 4. Event backbone (WP-02)
+
+**Verify explicitly, for messages too.** A consumer treats every record as untrusted input:
+- The envelope must parse, and the type must be known.
+- The **topic must be the type's topic** and the **producer must be the type's owner** (`EventCatalog`). A forged `FundsDeposited` claiming `payment-service` is dead-lettered UNTRUSTED_SOURCE, and the forged 1,000,000.00 never reaches the ledger (`ConsumerSemanticsIT`).
+- The version must be supported, the record key must equal the aggregate id, and the payload must satisfy its contract.
+- Business invariants are then re-checked by the participant. For example, reservation re-checks account status even though Payment already checked it (the check-then-act gap is tested).
+
+**Least privilege on the producer side.** `EnvelopeFactory` refuses to build a message whose type the calling context does not own. Only `platform.messaging` may touch the Kafka producer (ArchUnit).
+
+**Authentication and ACLs (design, see `deploy/kafka/acl-matrix.sh`):**
+- One principal per service (SASL/SCRAM or mTLS; credentials from the secret store; short-lived where possible).
+- Exactly one writer per topic. Read only on consumed topics.
+- Prefixed rights only on the service's own `<topic>-<group>-*` retry and DLT topics.
+- Default deny.
+- TLS on every listener.
+
+**Data minimisation.** Checkout evidence (IP, device) travels only on `fraud.commands`. `RiskAssessed` carries codes, not evidence. DLT records never contain stack traces or exception messages.
+
+**Operator actions.** DLQ replay requires `ops:dlq-replay` and is audit-logged with the requesting subject. Metrics require `ops:metrics`. Deposits require `funds:deposit` (a separate treasury identity).
+
+**Accepted gap (review K1).** Local Kafka is PLAINTEXT with no authorizer, and the monolith uses one Kafka identity. The ACL matrix is enforced when contexts deploy separately (platform WP).
+
+## 5. Deliberately deferred (WP-02/03 and platform WPs)
 
 | Capability | Plan |
 |---|---|
@@ -69,8 +94,9 @@ Other controls:
 | Audit | An append-only audit trail of security-relevant actions (who cancelled or froze what) |
 | Rate limiting | Per-client quotas (WP-03) |
 
-## 5. Local-development relaxations (must NOT reach production)
+## 6. Local-development relaxations (must NOT reach production)
 
 - The `payflow-customer-app` client has `directAccessGrantsEnabled` (password grant) for curl demos. Disable it; use Authorization Code with PKCE only.
 - Keycloak runs `start-dev` over HTTP. Production needs TLS and a real database.
 - Swagger UI and `/v3/api-docs` are public. Disable them with `springdoc.api-docs.enabled=false` in production.
+- Kafka runs PLAINTEXT on 127.0.0.1 with no ACLs (see §4).

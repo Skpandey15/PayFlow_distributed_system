@@ -1,6 +1,6 @@
 # ADR-004: Polyglot persistence with database-per-context and no distributed transactions
 
-- Status: Accepted (WP-01)
+- Status: Accepted (WP-01); realised in WP-02 by ADR-009 (Outbox), ADR-012 (Saga) and ADR-013 (idempotent consumers)
 - Date: 2026-09-26
 
 ## Context

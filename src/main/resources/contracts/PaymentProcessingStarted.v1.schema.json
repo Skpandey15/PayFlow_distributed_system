@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:PaymentProcessingStarted:v1",
+  "title": "PaymentProcessingStarted v1",
+  "description": "",
+  "x-topic": "payment.events",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "additionalProperties": false
+}

@@ -28,7 +28,7 @@ Each entry is written as Problem → Pattern → Where → Why → Alternative �
 - **Why:** The logic belongs to no single entity.
 
 ### Application Service
-- **Where:** `CreatePaymentService`, `AuthorizePaymentService`, `ProcessPaymentService` and the others.
+- **Where:** `CreatePaymentService`, `CancelPaymentService`, `PaymentSagaService`, `FundsService` and the others.
 - **Why:** They orchestrate ports and own transaction boundaries. They contain no business rules.
 
 ### Domain Event
@@ -84,7 +84,81 @@ Each entry is written as Problem → Pattern → Where → Why → Alternative �
 - **Where:** `PaymentSnapshot`, `AccountSnapshot`, `SettlementSnapshot`.
 - **Why:** Externalises full state for persistence without public setters or JPA in the domain.
 
-## Considered and deliberately NOT used
+## Distributed-system patterns (WP-02)
+
+### Transactional Outbox
+- **Problem:** state change and event publication cannot be atomic across PostgreSQL and Kafka (the dual write).
+- **Where:** `OutboxWriter` plus `<ctx>.outbox_event`, used by `OutboxPaymentEventPublisher`, `OutboxSagaCommandPublisher`, `OutboxFundsEventPublisher` and `OutboxSettlementEventPublisher`.
+- **Why:** one local transaction covers both.
+- **Alternative:** publish-after-commit (loss), XA (rejected), CDC (ADR-010).
+- **Trade-off:** at-least-once, about 200 ms latency, purge duty.
+- **Failure behaviour:** crash after commit means publish later; crash after the ack means a duplicate the consumers absorb.
+
+### Polling Publisher (message relay)
+- **Where:** `OutboxRelay` with an advisory-lock single writer, id order, stop at the first failure.
+- **Alternative:** Debezium CDC.
+- **Trade-off:** throughput ceiling (review K2).
+
+### Idempotent Consumer (Inbox)
+- **Problem:** at-least-once delivery.
+- **Where:** `IdempotentExecutor` plus `<ctx>.processed_event`; natural keys in Settlement and Fraud.
+- **Alternative:** Redis dedup (a second store, lossy).
+- **Failure behaviour:** redelivery gives DUPLICATE with no effect.
+
+### Saga (orchestration) and Compensating Transaction
+- **Where:** `PaymentSaga`, `PaymentSagaService`; the compensation is `ReleaseFunds`.
+- **Alternative:** choreography (kept for the Ledger follower), 2PC.
+- **Trade-off:** no isolation; intermediate states are visible.
+- **Failure behaviour:** stale replies are ignored; unknown outcomes are escalated.
+
+### Process Manager recovery / Scheduler-Agent-Supervisor
+- **Where:** `SagaRecoveryService` plus `SagaRecoveryJob`, using SKIP LOCKED.
+- **Why:** lost commands (DLT) and stuck steps self-heal.
+- **Trade-off:** timeouts must exceed normal latency.
+
+### Publish-Subscribe and Competing Consumers
+- **Where:** consumer groups (for example `funds.events` is read by `payment-service` and `ledger-service` independently); up to 6 competing instances per group.
+
+### Retry and Dead Letter Channel
+- **Where:** `@RetryableTopic` per group, `FailureClassifier`, `DeadLetterObserver`, `DeadLetterReplayService`.
+- **Trade-off:** non-blocking retries can reorder a key; handlers are order-tolerant.
+
+### Poison Message handling
+- **Where:** `EventDeserializationException`, `UnsupportedEventVersionException` and contract violations go straight to the DLT; the partition is never blocked.
+
+### Correlation Identifier
+- **Where:** envelope `correlationId`, `causationId`, `sagaId`, plus the W3C `traceparent`, via `MessageContext` and `TraceparentSupplier`.
+
+### Event-Carried State Transfer
+- **Where:** commands carry the amount, parties and method, so participants never call back into Payment.
+- **Trade-off:** larger messages, and data is duplicated per event.
+
+### Event Notification
+- **Where:** `payment.events` (a public lifecycle stream).
+
+### Envelope Wrapper and Canonical Data Model (published language)
+- **Where:** `EventEnvelope` plus `com.payflow.contracts`, with JSON Schemas checked in the build.
+
+### Upcaster (schema evolution)
+- **Where:** `EventCatalog` upcasters (`RiskAssessedV2.fromV1`).
+
+### Pessimistic Offline Lock (row lock)
+- **Where:** `account_balance` `SELECT … FOR UPDATE` for reservations, with deterministic lock ordering in capture.
+- **Alternative:** optimistic locking (retry storms on hot accounts).
+
+### Tombstone (out-of-order compensation)
+- **Where:** a RELEASED reservation created by a release that overtakes its reserve.
+
+## Considered and NOT used in WP-02
+
+| Pattern | Why not |
+|---|---|
+| CQRS / materialized views | No cross-context query need yet; `payment.events` enables them later |
+| Event Sourcing | The relational financial core is authoritative; the outbox gives the needed events without the paradigm shift |
+| Distributed lock (Redis) | Financial correctness belongs in PostgreSQL row locks and constraints |
+| Kafka transactions (EOS) | Our effects are outside Kafka; they would not provide end-to-end exactly-once |
+
+## Considered and deliberately NOT used (WP-01)
 
 | Pattern | Why not (yet) |
 |---|---|
@@ -93,5 +167,5 @@ Each entry is written as Problem → Pattern → Where → Why → Alternative �
 | Decorator / Proxy for resilience | Belongs to WP-03 around `SettlementGatewayPort` and the ACL adapters. The seams exist, the decorators do not |
 | Command | Commands exist as data (`*Command` records), but there is no command bus or undo; one would be premature |
 | CQRS | One store per context serves both reads and writes. Cross-context read models come with events (WP-02) |
-| Saga / Outbox | WP-02 by scope. `ProcessPaymentService` is a synchronous, re-drivable precursor |
+| Saga / Outbox | Delivered in WP-02 (see the section above) |
 | Unit of Work (explicit) | JPA's persistence context plus `TransactionRunner` already provide it |

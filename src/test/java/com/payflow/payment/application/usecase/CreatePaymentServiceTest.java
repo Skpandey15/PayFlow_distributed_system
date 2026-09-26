@@ -6,10 +6,14 @@ import com.payflow.payment.application.port.out.AccountLookupPort;
 import com.payflow.payment.application.port.out.AccountLookupPort.PaymentParty;
 import com.payflow.payment.application.port.out.IdempotencyStorePort.IdempotencyRecord;
 import com.payflow.payment.application.port.out.PaymentEventPublisherPort;
+import com.payflow.payment.application.port.out.SagaCommandPort;
 import com.payflow.payment.domain.Payment;
 import com.payflow.payment.domain.PaymentId;
 import com.payflow.payment.domain.PaymentMethod;
 import com.payflow.payment.domain.PaymentStatus;
+import com.payflow.payment.domain.saga.CheckoutContext;
+import com.payflow.payment.domain.saga.PaymentSaga;
+import com.payflow.payment.domain.saga.SagaStep;
 import com.payflow.shared.application.Actor;
 import com.payflow.shared.application.ForbiddenException;
 import com.payflow.shared.application.NotFoundException;
@@ -33,6 +37,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -48,9 +53,11 @@ class CreatePaymentServiceTest {
     final Map<AccountId, PaymentParty> accountDirectory = new HashMap<>();
     final AccountLookupPort accounts = id -> Optional.ofNullable(accountDirectory.get(id));
     final PaymentEventPublisherPort events = mock(PaymentEventPublisherPort.class);
+    final InMemoryPaymentSagaRepository sagas = new InMemoryPaymentSagaRepository();
+    final SagaCommandPort commands = mock(SagaCommandPort.class);
     final DirectTransactionRunner tx = new DirectTransactionRunner();
-    final CreatePaymentService service = new CreatePaymentService(payments, idempotency, accounts, events, tx,
-            Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofHours(24));
+    final CreatePaymentService service = new CreatePaymentService(payments, idempotency, accounts, sagas, commands,
+            events, tx, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofHours(24));
 
     final Actor alice = Actors.customer("alice");
     final AccountId aliceAccount = AccountId.newId();
@@ -64,7 +71,7 @@ class CreatePaymentServiceTest {
 
     CreatePaymentCommand command(Actor actor, String key, String amount) {
         return new CreatePaymentCommand(actor, key, aliceAccount, bobAccount, Money.of(amount, "USD"),
-                PaymentMethod.CARD, "order-1");
+                PaymentMethod.CARD, "order-1", CheckoutContext.NONE, "corr-1");
     }
 
     @Test
@@ -79,6 +86,11 @@ class CreatePaymentServiceTest {
         assertThat(record.expiresAt()).isEqualTo(NOW.plus(Duration.ofHours(24)));
         assertThat(tx.readWriteTransactions()).as("exactly one write transaction").isEqualTo(1);
         verify(events, times(1)).publish(anyList());
+        // The saga starts in the same transaction, and its first command is written with it (outbox).
+        PaymentSaga saga = sagas.get(new PaymentId(result.payment().id()));
+        assertThat(saga.step()).isEqualTo(SagaStep.AWAITING_RISK);
+        assertThat(saga.correlationId()).isEqualTo("corr-1");
+        verify(commands, times(1)).requestRiskAssessment(any(), any());
     }
 
     @Test
@@ -122,7 +134,7 @@ class CreatePaymentServiceTest {
         accountDirectory.put(bobAccount, new PaymentParty(bobAccount, "bob", USD, true));
         CreatePaymentResult alicePayment = service.create(command(alice, "shared-key", "25.00"));
         CreatePaymentResult bobPayment = service.create(new CreatePaymentCommand(Actors.customer("bob"), "shared-key",
-                bobAccount, aliceAccount, Money.of("25.00", "USD"), PaymentMethod.CARD, "order-1"));
+                bobAccount, aliceAccount, Money.of("25.00", "USD"), PaymentMethod.CARD, "order-1", CheckoutContext.NONE, "corr-1"));
 
         assertThat(bobPayment.replayed()).isFalse();
         assertThat(bobPayment.payment().id()).isNotEqualTo(alicePayment.payment().id());
@@ -131,7 +143,7 @@ class CreatePaymentServiceTest {
     @Test
     void callerMustOwnThePayerAccount() {
         assertThatThrownBy(() -> service.create(new CreatePaymentCommand(Actors.customer("mallory"), "k",
-                aliceAccount, bobAccount, Money.of("1", "USD"), PaymentMethod.CARD, null)))
+                aliceAccount, bobAccount, Money.of("1", "USD"), PaymentMethod.CARD, null, CheckoutContext.NONE, "corr-1")))
                 .isInstanceOf(NotFoundException.class)
                 .extracting("code").isEqualTo("PAYER_ACCOUNT_NOT_FOUND");
         assertThat(payments.rows).isEmpty();
@@ -140,7 +152,7 @@ class CreatePaymentServiceTest {
     @Test
     void currencyMustMatchBothAccounts() {
         assertThatThrownBy(() -> service.create(new CreatePaymentCommand(alice, "k", aliceAccount, bobAccount,
-                Money.of("1", "EUR"), PaymentMethod.CARD, null)))
+                Money.of("1", "EUR"), PaymentMethod.CARD, null, CheckoutContext.NONE, "corr-1")))
                 .extracting("code").isEqualTo("CURRENCY_MISMATCH");
     }
 

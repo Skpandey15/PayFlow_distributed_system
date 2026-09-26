@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:Envelope:v1",
+  "title": "PayFlow event envelope v1",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "eventVersion",
+    "producer",
+    "aggregateType",
+    "aggregateId",
+    "occurredAt",
+    "correlationId",
+    "payload"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eventVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aggregateType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aggregateId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "correlationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "causationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "sagaId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

@@ -6,6 +6,7 @@ import com.payflow.payment.application.port.in.CreatePaymentUseCase;
 import com.payflow.payment.application.port.in.CreatePaymentUseCase.CreatePaymentCommand;
 import com.payflow.payment.application.port.in.CreatePaymentUseCase.CreatePaymentResult;
 import com.payflow.payment.domain.PaymentMethod;
+import com.payflow.payment.domain.saga.CheckoutContext;
 import com.payflow.shared.application.Actor;
 import com.payflow.shared.domain.AccountId;
 import com.payflow.shared.domain.Money;
@@ -53,7 +54,7 @@ class IdempotencyConcurrencyIT {
         AccountId payee = new AccountId(openAccount.open(new OpenAccountCommand(bob, "Bob", "USD")).id());
         String key = "retry-storm-" + UUID.randomUUID();
         CreatePaymentCommand command = new CreatePaymentCommand(alice, key, payer, payee, Money.of("99.99", "USD"),
-                PaymentMethod.CARD, "order-7");
+                PaymentMethod.CARD, "order-7", CheckoutContext.NONE, "corr-" + key);
 
         CountDownLatch startGun = new CountDownLatch(1);
         List<Future<CreatePaymentResult>> futures = new ArrayList<>();

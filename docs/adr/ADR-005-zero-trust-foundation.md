@@ -17,8 +17,9 @@ PayFlow will run on Kubernetes, where "inside the cluster" is a network location
   - a non-blank `sub`
 - **Least privilege.**
   - Per-route scope rules are declared in one place (`SecurityConfiguration`). Every unmapped route is `denyAll`.
-  - Scopes: `payments:read`, `payments:write`, `payments:process`, `payments:admin`, `accounts:read`, `accounts:write`, `accounts:admin`, `ledger:read` and `fraud:read`.
-  - The customer client gets only customer scopes. The orchestrator workload gets only `payments:process`. Operations gets read/admin scopes.
+  - Scopes (WP-02 revision): `payments:read`, `payments:write`, `payments:admin`, `accounts:read`, `accounts:write`, `accounts:admin`, `funds:deposit`, `ledger:read`, `fraud:read`, `ops:dlq-replay` and `ops:metrics`.
+  - The customer client gets only customer scopes. The treasury workload gets only `funds:deposit`. Operations gets read/admin/ops scopes.
+  - WP-01's `payments:process` (orchestrator) was retired in WP-02 when the workflow moved to the event-driven saga.
 - **Defence in depth.**
   - Use cases re-check the permission (`ForbiddenException.requirePermission`) and enforce ownership (initiator or admin). Callers without visibility get **404**, not 403, so ids cannot be probed.
   - Payers can only pay from accounts they own.

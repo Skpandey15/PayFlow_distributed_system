@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:RiskAssessed:v1",
+  "title": "RiskAssessed v1",
+  "description": "",
+  "x-topic": "fraud.events",
+  "x-producer": "fraud-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "approved",
+    "riskScore"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "approved": {
+      "type": "boolean"
+    },
+    "riskScore": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

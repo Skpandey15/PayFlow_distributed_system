@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:FundsDeposited:v1",
+  "title": "FundsDeposited v1",
+  "description": "",
+  "x-topic": "funds.events",
+  "x-producer": "account-service",
+  "type": "object",
+  "required": [
+    "depositId",
+    "accountId",
+    "amount",
+    "currency"
+  ],
+  "properties": {
+    "depositId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "accountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^-?\\d{1,15}(\\.\\d{1,4})?$",
+      "description": "Decimal string; never a JSON number"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:SettlementCompleted:v1",
+  "title": "SettlementCompleted v1",
+  "description": "",
+  "x-topic": "settlement.events",
+  "x-producer": "settlement-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "settlementId",
+    "providerReference"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "settlementId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "providerReference": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

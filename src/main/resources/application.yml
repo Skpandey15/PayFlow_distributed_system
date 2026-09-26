@@ -38,6 +38,44 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  kafka:
+    bootstrap-servers: ${PAYFLOW_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    client-id: payflow
+    producer:
+      # Durability: the broker acknowledges only after all in-sync replicas have the record.
+      acks: all
+      properties:
+        # Idempotent producer: broker-side dedup of producer retries; keeps per-partition order with up to 5 in flight.
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        # Fail fast when the broker is unreachable; the outbox keeps the event and the relay retries later.
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 15000
+        linger.ms: 5
+    consumer:
+      # Offsets are committed by the container after the listener returns (after the DB commit), never on a timer.
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      max-poll-records: 50
+      isolation-level: read_committed
+      properties:
+        # Incremental rebalancing: a joining/leaving instance does not stop every consumer in the group.
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+    listener:
+      # Commit each record's offset after it was processed successfully (or routed to retry/DLT).
+      ack-mode: record
+      concurrency: 3
+      # Continues the W3C trace from the traceparent header that the outbox stored.
+      observation-enabled: true
+      missing-topics-fatal: false
+    template:
+      # The relay sets the traceparent captured at outbox-write time; template observation would overwrite it.
+      observation-enabled: false
+  task:
+    scheduling:
+      pool:
+        size: 4
 
 server:
   shutdown: graceful
@@ -49,7 +87,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # metrics requires scope ops:metrics; Prometheus scraping is WP-03.
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
@@ -87,6 +126,32 @@ payflow:
       # the application refuses to start (fail closed). Set PAYFLOW_SECURITY_JWT_JWK_SET_URI.
   persistence:
     transaction-timeout: 5s
+  messaging:
+    topic:
+      partitions: ${PAYFLOW_KAFKA_PARTITIONS:6}
+      # Production: 3 (with min.insync.replicas=2, acks=all). Local single broker: 1.
+      replication-factor: ${PAYFLOW_KAFKA_REPLICATION_FACTOR:1}
+      retention: 7d
+    outbox:
+      poll-interval-ms: 200
+      batch-size: 100
+      send-timeout: 5s
+      relay-transaction-timeout: 30s
+      retention: 7d
+    retry:
+      # 1 original + 3 retries at 1s, 3s, 9s (non-blocking retry topics), then the dead-letter topic.
+      attempts: 4
+      initial-delay-ms: 1000
+      multiplier: 3
+      max-delay-ms: 30000
+  saga:
+    risk-timeout: 30s
+    funds-timeout: 30s
+    settlement-timeout: 2m
+    capture-timeout: 30s
+    compensation-timeout: 30s
+    max-step-attempts: 3
+    recovery-interval-ms: 10000
   payment:
     idempotency-retention: 24h
     idempotency-purge-interval: 1h

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:payflow:contract:SubmitSettlement:v1",
+  "title": "SubmitSettlement v1",
+  "description": "",
+  "x-topic": "settlement.commands",
+  "x-producer": "payment-service",
+  "type": "object",
+  "required": [
+    "paymentId",
+    "method",
+    "amount",
+    "currency"
+  ],
+  "properties": {
+    "paymentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "method": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^-?\\d{1,15}(\\.\\d{1,4})?$",
+      "description": "Decimal string; never a JSON number"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "reference": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}
