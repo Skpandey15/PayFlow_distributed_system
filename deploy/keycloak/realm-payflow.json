@@ -1,0 +1,109 @@
+{
+  "realm": "payflow",
+  "enabled": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "revokeRefreshToken": true,
+  "bruteForceProtected": true,
+  "defaultDefaultClientScopes": ["basic"],
+  "clientScopes": [
+    {
+      "name": "basic",
+      "description": "Subject claim (required by the PayFlow API)",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "config": { "access.token.claim": "true", "introspection.token.claim": "true" }
+        }
+      ]
+    },
+    {
+      "name": "payflow-api-audience",
+      "description": "Adds aud=payflow-api; the API rejects tokens minted for any other audience",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "false", "display.on.consent.screen": "false" },
+      "protocolMappers": [
+        {
+          "name": "payflow-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "payflow-api", "access.token.claim": "true", "id.token.claim": "false" }
+        }
+      ]
+    },
+    { "name": "payments:read", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "payments:write", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "payments:process", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "payments:admin", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "accounts:read", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "accounts:write", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "accounts:admin", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "ledger:read", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } },
+    { "name": "fraud:read", "protocol": "openid-connect", "attributes": { "include.in.token.scope": "true", "display.on.consent.screen": "false" } }
+  ],
+  "clients": [
+    {
+      "clientId": "payflow-customer-app",
+      "name": "PayFlow customer app (public client, Authorization Code + PKCE)",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "payflow-api-audience", "payments:read", "payments:write", "accounts:read", "accounts:write"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "payflow-orchestrator",
+      "name": "Payment orchestrator workload identity (client credentials)",
+      "publicClient": false,
+      "secret": "${PAYFLOW_ORCHESTRATOR_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "payflow-api-audience", "payments:process"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "payflow-ops",
+      "name": "Operations / support / reconciliation (client credentials)",
+      "publicClient": false,
+      "secret": "${PAYFLOW_OPS_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "payflow-api-audience", "payments:read", "payments:admin", "accounts:read", "accounts:admin", "ledger:read", "fraud:read"],
+      "optionalClientScopes": []
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@payflow.example",
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Demo",
+      "credentials": [{ "type": "password", "value": "${PAYFLOW_DEMO_USER_PASSWORD}", "temporary": false }]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "email": "bob@payflow.example",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Demo",
+      "credentials": [{ "type": "password", "value": "${PAYFLOW_DEMO_USER_PASSWORD}", "temporary": false }]
+    }
+  ]
+}

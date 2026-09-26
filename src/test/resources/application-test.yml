@@ -1,0 +1,15 @@
+payflow:
+  scheduling:
+    enabled: false
+  security:
+    jwt:
+      issuer: https://idp.payflow.test/realms/payflow
+      audience: payflow-api
+
+logging:
+  level:
+    root: WARN
+    com.payflow: INFO
+    payflow.events: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-}] %logger{36} - %msg%n"

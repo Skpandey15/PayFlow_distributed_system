@@ -1,0 +1,122 @@
+# PayFlow WP-01 runtime configuration.
+# Rule: no secrets in this file. Credentials come from the environment (Kubernetes Secret / Vault in later WPs).
+spring:
+  application:
+    name: payflow
+  threads:
+    virtual:
+      # Request handling on virtual threads. The DB connection pool, not the thread pool, is the concurrency
+      # bulkhead for database work (see WP-01-LLD, "Scalability").
+      enabled: true
+  datasource:
+    url: ${PAYFLOW_DB_URL:jdbc:postgresql://localhost:5432/payflow}
+    # Runtime role: DML only (see R__runtime_role_grants.sql).
+    username: ${PAYFLOW_DB_USER:payflow_app}
+    password: ${PAYFLOW_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${PAYFLOW_DB_POOL_SIZE:20}
+      # Fail fast when the pool is exhausted instead of queueing requests for 30s.
+      connection-timeout: 3000
+  jpa:
+    # No lazy-loading from controllers and no transactions stretched over the whole HTTP request.
+    open-in-view: false
+    hibernate:
+      # Schema is owned by Flyway. Hibernate only verifies that entities match it.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # In deployed environments migrations run as the schema-OWNER role, separate from the runtime role
+    # (least privilege): set SPRING_FLYWAY_USER / SPRING_FLYWAY_PASSWORD (see docker-compose.yml).
+    # When unset, Flyway reuses the application datasource (single-user test databases).
+    placeholders:
+      runtime_role: ${PAYFLOW_DB_RUNTIME_ROLE:payflow_app}
+  mongodb:
+    uri: ${PAYFLOW_MONGO_URI:mongodb://localhost:27017/payflow_fraud}
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        # Readiness = "can serve payments": PostgreSQL is required. MongoDB is deliberately excluded. A fraud-store
+        # outage degrades authorization (fail closed, 503) but must not pull every pod out of the load balancer,
+        # which would also take down reads and payment creation.
+        readiness:
+          include: readinessState,db
+        # Liveness never checks dependencies: a DB outage must not cause a restart storm.
+        liveness:
+          include: livenessState
+  tracing:
+    sampling:
+      probability: ${PAYFLOW_TRACE_SAMPLING:1.0}
+    export:
+      # W3C trace context is propagated and logged now. Export to a collector is WP-03.
+      enabled: ${PAYFLOW_TRACE_EXPORT_ENABLED:false}
+
+logging:
+  level:
+    # Hibernate logs every SQL error at ERROR before rethrowing. Unique violations are EXPECTED control flow here
+    # (idempotency, settlement and ledger races) and are translated by the adapters. Real failures propagate and are
+    # logged once at the API boundary, so this avoids double-logging and alert fatigue.
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: OFF
+
+payflow:
+  security:
+    jwt:
+      issuer: ${PAYFLOW_JWT_ISSUER:}
+      audience: ${PAYFLOW_JWT_AUDIENCE:payflow-api}
+      # payflow.security.jwt.jwk-set-uri is intentionally not defaulted: without it no JwtDecoder exists and
+      # the application refuses to start (fail closed). Set PAYFLOW_SECURITY_JWT_JWK_SET_URI.
+  persistence:
+    transaction-timeout: 5s
+  payment:
+    idempotency-retention: 24h
+    idempotency-purge-interval: 1h
+  fraud:
+    decline-threshold: 70
+    model-version: rules-v1
+    velocity-window: 1h
+    velocity-max-attempts: 10
+    velocity-score: 40
+    high-amount-score: 50
+    high-amount-thresholds:
+      USD: 10000
+      EUR: 10000
+      GBP: 8000
+      INR: 800000
+      JPY: 1500000
+    missing-device-score: 15
+    high-risk-countries: KP,IR
+    high-risk-country-score: 70
+
+---
+# Structured (ECS JSON) logs everywhere except local development and tests.
+spring:
+  config:
+    activate:
+      on-profile: "!local & !test"
+logging:
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        name: payflow

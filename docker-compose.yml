@@ -1,0 +1,104 @@
+# Local WP-01 runtime: PayFlow + PostgreSQL + MongoDB + Keycloak (OIDC identity provider).
+#   cp .env.example .env   # then set every password
+#   docker compose up --build
+# Secrets come only from .env (git-ignored). Nothing secret is committed.
+name: payflow
+
+services:
+  postgres:
+    image: postgres:18.1-alpine
+    environment:
+      POSTGRES_DB: payflow
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      # Consumed by deploy/postgres/init to create the least-privilege roles.
+      PAYFLOW_DB_MIGRATION_PASSWORD: ${PAYFLOW_DB_MIGRATION_PASSWORD:?set PAYFLOW_DB_MIGRATION_PASSWORD in .env}
+      PAYFLOW_DB_PASSWORD: ${PAYFLOW_DB_PASSWORD:?set PAYFLOW_DB_PASSWORD in .env}
+    volumes:
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:${PAYFLOW_PG_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d payflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo:
+    image: mongo:8.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: payflow_fraud
+      # Consumed by deploy/mongo/init to create the application user (readWrite on payflow_fraud only).
+      PAYFLOW_MONGO_PASSWORD: ${PAYFLOW_MONGO_PASSWORD:?set PAYFLOW_MONGO_PASSWORD in .env}
+    volumes:
+      - ./deploy/mongo/init:/docker-entrypoint-initdb.d:ro
+      - mongodata:/data/db
+    ports:
+      - "127.0.0.1:${PAYFLOW_MONGO_HOST_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    command: ["start-dev", "--import-realm", "--http-port=8081"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      # Tokens always carry iss=http://localhost:<port>/realms/payflow; the API validates exactly that issuer.
+      KC_HOSTNAME: http://localhost:${PAYFLOW_KEYCLOAK_HOST_PORT:-8081}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      # Resolved by the realm import (placeholders in deploy/keycloak/realm-payflow.json).
+      PAYFLOW_ORCHESTRATOR_CLIENT_SECRET: ${PAYFLOW_ORCHESTRATOR_CLIENT_SECRET:?set in .env}
+      PAYFLOW_OPS_CLIENT_SECRET: ${PAYFLOW_OPS_CLIENT_SECRET:?set in .env}
+      PAYFLOW_DEMO_USER_PASSWORD: ${PAYFLOW_DEMO_USER_PASSWORD:?set in .env}
+    volumes:
+      - ./deploy/keycloak/realm-payflow.json:/opt/keycloak/data/import/realm-payflow.json:ro
+    ports:
+      - "127.0.0.1:${PAYFLOW_KEYCLOAK_HOST_PORT:-8081}:8081"
+
+  payflow:
+    build: .
+    image: payflow:wp01
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      PAYFLOW_DB_URL: jdbc:postgresql://postgres:5432/payflow
+      PAYFLOW_DB_USER: payflow_app
+      PAYFLOW_DB_PASSWORD: ${PAYFLOW_DB_PASSWORD}
+      SPRING_FLYWAY_USER: payflow_migrator
+      SPRING_FLYWAY_PASSWORD: ${PAYFLOW_DB_MIGRATION_PASSWORD}
+      PAYFLOW_MONGO_URI: mongodb://payflow_fraud_app:${PAYFLOW_MONGO_PASSWORD}@mongo:27017/payflow_fraud?authSource=payflow_fraud
+      PAYFLOW_JWT_ISSUER: http://localhost:${PAYFLOW_KEYCLOAK_HOST_PORT:-8081}/realms/payflow
+      PAYFLOW_SECURITY_JWT_JWK_SET_URI: http://keycloak:8081/realms/payflow/protocol/openid-connect/certs
+    ports:
+      - "127.0.0.1:${PAYFLOW_API_HOST_PORT:-8080}:8080"
+    # Container hardening: immutable root filesystem, no privilege escalation, no Linux capabilities.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  pgdata:
+  mongodata:

@@ -1,0 +1,11 @@
+# Running the app on the host against `docker compose up postgres mongo keycloak`.
+# Credentials still come from the environment (.env). Only non-secret endpoints are set here.
+payflow:
+  security:
+    jwt:
+      issuer: ${PAYFLOW_JWT_ISSUER:http://localhost:8081/realms/payflow}
+      jwk-set-uri: ${PAYFLOW_SECURITY_JWT_JWK_SET_URI:http://localhost:8081/realms/payflow/protocol/openid-connect/certs}
+
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{correlationId:-},%X{traceId:-}] %logger{36} - %msg%n"

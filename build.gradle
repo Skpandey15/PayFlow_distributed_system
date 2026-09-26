@@ -1,0 +1,93 @@
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.1'
+}
+
+group = 'com.payflow'
+version = '0.1.0-SNAPSHOT'
+description = 'PayFlow WP-01 - backend foundation and domain architecture (modular monolith)'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    springdocVersion = '3.1.1'
+    archunitVersion = '1.4.1'
+}
+
+configurations {
+    // Mockito's inline mock maker needs its agent attached explicitly on JDK 21+ (JEP 451).
+    mockitoAgent
+}
+
+dependencies {
+    // All Spring-managed versions come from the Boot BOM; no hand-picked versions for managed libraries.
+    implementation platform(SpringBootPlugin.BOM_COORDINATES)
+    mockitoAgent platform(SpringBootPlugin.BOM_COORDINATES)
+    testImplementation platform(SpringBootPlugin.BOM_COORDINATES)
+
+    // Inbound adapter: HTTP
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+
+    // Outbound adapters: PostgreSQL (authoritative financial state) + MongoDB (fraud evidence)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+    implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
+
+    // Zero Trust foundation: every request carries a verified JWT
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+
+    // Observability foundation (full platform is WP-03): health/readiness probes, W3C trace-context
+    // propagation and traceId/spanId in logs. Span export is off until WP-03 provides a collector.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-mongodb'
+    testImplementation "com.tngtech.archunit:archunit-junit5:${archunitVersion}"
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    mockitoAgent('org.mockito:mockito-core') { transitive = false }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-parameters', '-Xlint:unchecked,deprecation']
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}", '-Xshare:off'
+    testLogging {
+        events 'failed', 'skipped'
+        exceptionFormat 'full'
+        showStandardStreams = false
+    }
+    // Architecture, domain and integration tests all gate the build: a violated boundary fails CI.
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'payflow.jar'
+}
+
+tasks.named('jar') {
+    enabled = false
+}

@@ -1,0 +1,11 @@
+.gradle/
+build/
+out/
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+.DS_Store
+# Local secrets - never commit
+.env
