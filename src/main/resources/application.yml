@@ -212,7 +212,9 @@ payflow:
       # Published rows are diagnostics only (the event is on Kafka for 7 d). 7 d here grew the payment outbox to
       # 3.6 M rows / 3.8 GB in the lab and slowed the database (TUNING-RESULTS §3). Production: partition by hour
       # and drop partitions instead of DELETE (CAPACITY-PLAN).
-      retention: ${PAYFLOW_OUTBOX_RETENTION:1h}
+      # Soak evidence (TUNING-RESULTS §10): 1 h at 20 payments/s grew the outboxes linearly to ~0.9 GB, close to the
+      # lab database's memory. 15 min bounds them near ~220 MB at that rate and is enough for diagnostics.
+      retention: ${PAYFLOW_OUTBOX_RETENTION:15m}
       purge-interval-ms: 300000
       # WP-03 (ADR-019). WP-02 behaviour for A/B measurement: pipelined=false, drain-budget=0s.
       pipelined: ${PAYFLOW_OUTBOX_PIPELINED:true}

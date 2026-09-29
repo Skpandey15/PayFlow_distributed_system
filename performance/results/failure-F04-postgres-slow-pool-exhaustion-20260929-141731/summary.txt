@@ -1,0 +1,20 @@
+scenario=F04-postgres-slow-pool-exhaustion inject_at=60s fault=60s load=3m
+time_to_quiet_after_recover_s=195
+report=/d/PayFlow_distributed_system/performance/results/20260929-141731-degraded-fault-F04-postgres-slow-pool-exhaustion
+acceptance_by_status={"201": 3069.726, "503": 513.144}
+shed_by_policy={"concurrency": 295.752}
+saga_outcomes={"COMPLETED": 3073.79}
+completion_p99_ms={"value": 66583.006}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 39.629}
+recovery_held={}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 23.736, "CONCURRENCY": 0.0}
+dead_lettered={}
+rail_outcomes={"ACCEPTED": 2986.403}
+max_outbox_age_s={"value": 14.0}
+alerts_fired={"PaymentAcceptanceBudgetSlowBurn": 1.0}
+reconciliation={"runId":"01a0ec5d-d4ca-7852-88d5-a3d5d3188dbe","skipped":false,"duration":"PT0.222207S","recordsChecked":245485,"findingsByCheck":{}}
+open_mismatches=none
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

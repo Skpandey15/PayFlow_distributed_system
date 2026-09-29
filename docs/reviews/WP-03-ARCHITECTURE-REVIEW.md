@@ -27,10 +27,11 @@ None open. Two blockers were found **during** WP-03 and fixed; both are measured
 | P-1 | One 2-vCPU instance misses the acceptance p99 SLO at peak (372 ms vs 300 ms, G1); SerialGC meets it (173 ms) but has an unbounded worst-case pause | tail latency at peak if only one pod runs | Two instances meet it (185 ms p99, completion 4 s, measured); production runs `minReplicas: 2` | PDB minAvailable 1, HPA on CPU | Platform: 3 vCPU per pod or keep ≥ 2 replicas |
 | P-2 | Completion p99 under bursts and stress is minutes (136 s, 252 s) | customers wait on accepted payments during overload | no loss; everything drains in 30–94 s. **Tested follow-up (TUNING-RESULTS §9):** a 1,000-record threshold at 5 s fixes sustained stress (completion p99 252 → 62 s) but oscillates under bursts (acceptance p99 268 → 1,484 ms), so it was rejected | alert PaymentCompletionSlow; 5 s lag sampling | adaptive concurrency (AIMD on the in-flight limit, driven by lag or latency); re-measure burst and stress |
 | P-3 | Hot account: one payer is serialised by its row lock (`Lock:transactionid` waits in every sample); rate limiting is per subject, so a merchant tier needs a higher limit | a merchant account caps at its lock throughput | correctness first (no weaker isolation) | per-subject limits; 0 deadlocks (deterministic lock order) | sub-accounts / batched reservations (BOTTLENECK-ANALYSIS §3) |
-| O-1 | **Soak (45 min) not executed.** Retention and purge fixes are verified only by unit/IT and by table sizes after the fix, not by a long run | slow leaks or growth undetected | lab time | purge metrics, reconciliation, table-size monitoring via postgres-exporter | run the weekly soak job (CI level 3) |
-| O-2 | Failure campaign reduced to 5 live scenarios (F-01, F-03, F-06, F-14, F-21); the remaining 19 are covered by integration tests or performance runs (WP-03-FAILURE-MATRIX), not live | untested interactions live | time and a flaky Docker host | ITs with real containers | full `failure-campaign.sh` weekly |
+| O-1 | ~~Soak not executed~~ **Closed.** 45 min at 20/s (TUNING-RESULTS §8): acceptance p99 55.7 ms, completion p99 2.26 s, heap after GC flat at ≤ 94 MB, 0 DLT, 0 pool waits. It found the outbox growing at ~1.9 GB/h before the 1 h retention started purging; retention is now 15 min and the purge is proven (436k → 0 rows, 477 → 41 MB) | – | – | purge metrics, table-size monitoring via postgres-exporter | weekly soak job (CI level 3) |
+| O-2 | ~~Failure campaign reduced~~ **Mostly closed.** 12 of 24 scenarios now run LIVE (F-01..F-08, F-14, F-15, F-21, F-22), all with clean data-safety checks; the rest are IT/PERF-backed; F-11 is scripted but not run live | untested interactions for the IT-only rows | the rest need multi-node infrastructure | ITs with real containers | full `failure-campaign.sh` weekly |
 | K1' | Kafka authenticated and authorised but **not encrypted**; the monolith uses one identity | payload sniffing on the network; a compromised app can write any PayFlow topic | TLS/mTLS certificate management out of scope | SCRAM, deny-by-default ACLs, per-service matrix applied and verified | Platform: SASL_SSL/mTLS; identities on extraction |
 | R-1 | Reconciliation reads four schemas (documented exception to isolation) and scans the full ledger each run | cost grows with data | only way to get one consistent snapshot | read-only, advisory-locked, duration metric | incremental reconciliation before 10× |
+| R-2 | A slow or failing rail opens the circuit; circuit-open settlement commands are NOT_SENT failures that go through the retry topics to the DLT, and saga recovery re-issues them (F-07: 1,373 DLT, 446 s to quiet) | DLT alerts fire for a known rail outage, and completion recovers slowly | money is safe (NOT_SENT is never charged; recovery converges) | DeadLetterSpike + circuit-state panel | pause the settlement consumer while the rail circuit is open (or hold the command), instead of burning retries into the DLT |
 | M4 (WP-01) | Schema isolation by convention | unchanged | unchanged | unchanged | extraction |
 
 ### MINOR
@@ -38,8 +39,10 @@ None open. Two blockers were found **during** WP-03 and fixed; both are measured
 - Retry-topic consumers cost ~50 % of a broker core while idle (≈ 30 long-polling containers).
 - Tempo was OOM-killed at ~400 req/s with 10 % sampling; its memory was raised to 1.5 GiB. Production needs a
   collector with tail sampling.
-- The Kubernetes manifests are rendered with kustomize but not deployed or schema-validated (Docker flakiness blocked
-  kubeconform).
+- ~~Kubernetes manifests not deployed or validated~~ Closed: kubeconform 21/21 valid (`k8s-kubeconform.txt`), and the
+  k3d-lab overlay deployed under the `restricted` Pod Security profile. A payment went end to end to SETTLED (`k8s-k3d-smoke.txt`).
+  The deploy found a real bug: the base never set the Flyway migration role, so the pod ran DDL as `payflow_app` and
+  crashed. It is now wired as in compose (`SPRING_FLYWAY_USER` plus the `db-migration-password` secret key).
 - Per-subject rate limits are per instance (N replicas give N × the limit).
 - Manual review has no four-eyes approval.
 - The WP-03 build has higher CPU per payment than the baseline, because the pipeline now actually runs.
@@ -173,7 +176,7 @@ None open. Two blockers were found **during** WP-03 and fixed; both are measured
     batch allowed to finish; offsets are committed only after the business transaction (F-21).
 22. **Zero Trust gaps remaining:** Kafka TLS, one Kafka identity, dev-mode Keycloak, `.env` secrets, no four-eyes
     approval, unauthenticated rail-simulator admin API (lab only).
-23. **Operational risks remaining:** P-1, P-2, P-3, O-1, O-2, a Docker-flaky lab.
+23. **Operational risks remaining:** P-1, P-2, P-3, R-2, O-2 (reduced to IT-only rows), a Docker-flaky lab.
 24. **Architectural trade-offs remaining:**
     - A single relay per outbox (ordering over throughput).
     - Reconciliation crosses schemas.

@@ -137,10 +137,31 @@ PostgreSQL wait sampling during the final run (`hot-account-final2-lock-samples.
 visible, and intake control keeps it from collapsing the instance. The first final hot-account run was excluded:
 the host suspended during it (a 9 s "GC pause"; data stops 60 s after the load), see `*-SUSPECT-host-sleep`.
 
-## 8. Soak: not executed
+## 8. Soak: 45 minutes at 20 payments/s (closes review O-1)
 
-The 45-minute soak was **not run** in WP-03 (lab time and host instability). The growth findings in §3 and the
-retention/purge fixes are verified by tests and table sizes, not by a long run. Recorded as MAJOR O-1 in the review.
+Run `20260929-130854-soak-final` (G1, listener concurrency 3, lag admission 5,000, 1 h outbox retention at the time).
+53,997 payments were accepted, 3 k6 iterations were dropped (client side), and there were no throttles and no 5xx.
+
+| Signal | Value | Verdict |
+|---|---|---|
+| Acceptance p50 / p99 (server) | 11.6 / 55.7 ms | flat for 45 min, SLO 250 ms |
+| Completion p50 / p99 | 1.64 / 2.26 s | SLO met, no drift |
+| Heap after GC, max | 94 MB (heap committed 192 MB) | no leak: the post-GC floor is flat |
+| GC pause max / allocation rate | 41 ms / 87 MB/s | G1 steady state |
+| Hikari pending / timeouts | 0 / 0 | pool not a constraint |
+| Outbox publish delay p99 | 348 ms, backlog max 19 | relay keeps up |
+| Consumer lag max | 32 records | |
+| DLT / failed events / deadlocks | 0 / 0 / 0 | |
+| Drain after load | 30 s, nothing left open | |
+
+**Finding (fixed): outbox growth.** The 1 h retention never started purging inside a 45-minute run, so the outboxes
+grew linearly (`performance/results/soak-table-sizes.txt`), and the payment outbox reached 436k rows / 477 MB. That is
+about 1.9 GB/h per 20 payments/s before the first purge. The default retention is now **15 min**. Published rows are
+only diagnostic by then, because the relay publishes within a second and re-delivery relies on consumer idempotency,
+not on the outbox. `PAYFLOW_OUTBOX_RETENTION` overrides it. Proof (`performance/results/outbox-purge-proof.txt`): after
+the first scheduled purge (every 5 min, 5,000-row batches), all three outboxes went from 435,584 / 109,096 / 54,448
+rows to 0, and the payment table went from 477 MB to 41 MB. The inbox (`processed_event`, 8 d retention, about
+30 MB/45 min) is bounded by design; its purge is covered by `InboxPurgeJob` tests.
 
 ## 9. Review P-2 follow-up: tighter lag admission (1,000 records, sampled every 5 s)
 

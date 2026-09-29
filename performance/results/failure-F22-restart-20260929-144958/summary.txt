@@ -1,0 +1,20 @@
+scenario=F22-restart inject_at=60s fault=5s load=3m
+time_to_quiet_after_recover_s=264
+report=/d/PayFlow_distributed_system/performance/results/20260929-144958-degraded-fault-F22-restart
+acceptance_by_status={"201": 3278.906, "503": 0.0}
+shed_by_policy={"concurrency": 0.0}
+saga_outcomes={"COMPLETED": 3310.0}
+completion_p99_ms={"value": 89608.46}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 19.351}
+recovery_held={}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 0.0, "CONCURRENCY": 0.0}
+dead_lettered={"fraud.commands": 0.0, "settlement.commands": 0.0}
+rail_outcomes={"ACCEPTED": 3294.723, "SETTLEMENT_RAIL_CIRCUIT_OPEN": 0.0, "SETTLEMENT_RAIL_TIMEOUT": 0.0}
+max_outbox_age_s={"value": 5.0}
+alerts_fired={"PaymentCompletionSlow": 1.0}
+reconciliation={"runId":"01a0ec7b-c872-79cf-b3e5-1ba0af03a6da","skipped":false,"duration":"PT0.296661S","recordsChecked":318013,"findingsByCheck":{}}
+open_mismatches=none
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

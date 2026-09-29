@@ -1,0 +1,4 @@
+inject  08:53:51: docker stop payflow-mongo-1
+payflow-mongo-1
+recover 08:56:22: docker start payflow-mongo-1
+payflow-mongo-1

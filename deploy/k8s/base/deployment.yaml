@@ -63,6 +63,9 @@ spec:
             - name: PAYFLOW_DB_PASSWORD
               valueFrom:
                 secretKeyRef: {name: payflow-secrets, key: db-password}
+            - name: SPRING_FLYWAY_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: payflow-secrets, key: db-migration-password}
             - name: PAYFLOW_MONGO_URI
               valueFrom:
                 secretKeyRef: {name: payflow-secrets, key: mongo-uri}

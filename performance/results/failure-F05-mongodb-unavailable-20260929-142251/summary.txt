@@ -1,0 +1,20 @@
+scenario=F05-mongodb-unavailable inject_at=60s fault=150s load=3m
+time_to_quiet_after_recover_s=166
+report=/d/PayFlow_distributed_system/performance/results/20260929-142251-degraded-fault-F05-mongodb-unavailable
+acceptance_by_status={"201": 3624.768, "503": 0.0}
+shed_by_policy={"concurrency": 0.0}
+saga_outcomes={"COMPLETED": 3629.808}
+completion_p99_ms={"value": 179188.574}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 721.728}
+recovery_held={}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 831.131, "CONCURRENCY": 1.008}
+dead_lettered={"fraud.commands": 174.189}
+rail_outcomes={"ACCEPTED": 3588.957}
+max_outbox_age_s={"value": 0.0}
+alerts_fired={"PaymentAcceptanceBudgetSlowBurn": 1.0, "PaymentCompletionSlow": 1.0, "DeadLettersAppearing": 1.0, "DeadLetterSpike": 1.0}
+reconciliation={"runId":"01a0ec63-ac43-7109-89b7-645d58256e05","skipped":false,"duration":"PT0.279264S","recordsChecked":260189,"findingsByCheck":{}}
+open_mismatches=none
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

@@ -1,0 +1,9 @@
+inject  09:15:38: docker compose --env-file "C:/Users/skp4j/AppData/Local/Temp/claude/D--PayFlow-distributed-system/d904828d-79ac-4ec6-8506-1ba533503ad5/scratchpad/compose.env" run -d --no-deps --name payflow-payflow-2 -e SPRING_KAFKA_LISTENER_CONCURRENCY=6 payflow; sleep 45; docker exec payflow-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9094 --describe --group account-service --members
+ Container payflow-payflow-2 Creating 
+ payflow Your kernel does not support swap limit capabilities or the cgroup is not mounted. Memory limited without swap. 
+ Container payflow-payflow-2 Created 
+61b25b98cd81f3167d953fc8a8cd756128fe14eae7b82fcb66ec113c8fcfc4cd
+OCI runtime exec failed: exec failed: unable to start container process: exec: "C:/Program Files/Git/opt/kafka/bin/kafka-consumer-groups.sh": stat C:/Program Files/Git/opt/kafka/bin/kafka-consumer-groups.sh: no such file or directory
+recover 09:17:54: docker exec payflow-kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9094 --describe --group account-service --members; docker rm -f payflow-payflow-2
+OCI runtime exec failed: exec failed: unable to start container process: exec: "C:/Program Files/Git/opt/kafka/bin/kafka-consumer-groups.sh": stat C:/Program Files/Git/opt/kafka/bin/kafka-consumer-groups.sh: no such file or directory
+payflow-payflow-2

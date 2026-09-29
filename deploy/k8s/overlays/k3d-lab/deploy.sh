@@ -8,16 +8,18 @@ ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
 set -a; . "$ENV_FILE"; set +a
 CLUSTER=payflow-lab
 CTX=k3d-$CLUSTER
-K="kubectl --context $CTX"
+# A kubeconfig of its own: the lab never edits ~/.kube/config (or any other cluster's context).
+: "${LAB_KUBECONFIG:=${TMPDIR:-/tmp}/payflow-lab.kubeconfig}"
+K="kubectl --kubeconfig $LAB_KUBECONFIG --context $CTX"
 
 if [ "${1:-}" = "--delete" ]; then k3d cluster delete $CLUSTER; exit 0; fi
 
 k3d cluster list $CLUSTER >/dev/null 2>&1 || \
   k3d cluster create $CLUSTER --network payflow_default --servers 1 --agents 0 --no-lb \
-    --k3s-arg "--disable=traefik@server:0" --wait
+    --k3s-arg "--disable=traefik@server:0" --kubeconfig-update-default=false --wait
+k3d kubeconfig get $CLUSTER > "$LAB_KUBECONFIG"
 k3d image import -c $CLUSTER payflow:wp03 payflow-rail-simulator:wp03
 
-$K apply -k "$ROOT/deploy/k8s/overlays/k3d-lab" --dry-run=server >/dev/null   # server-side validation first
 $K apply -f - <<EOF_NS
 apiVersion: v1
 kind: Namespace
@@ -25,8 +27,10 @@ metadata:
   name: payflow
   labels: {pod-security.kubernetes.io/enforce: restricted, pod-security.kubernetes.io/audit: restricted}
 EOF_NS
+$K apply -k "$ROOT/deploy/k8s/overlays/k3d-lab" --dry-run=server >/dev/null   # server-side validation first
 $K -n payflow create secret generic payflow-secrets --dry-run=client -o yaml \
   --from-literal=db-password="$PAYFLOW_DB_PASSWORD" \
+  --from-literal=db-migration-password="$PAYFLOW_DB_MIGRATION_PASSWORD" \
   --from-literal=mongo-uri="mongodb://payflow_fraud_app:$PAYFLOW_MONGO_PASSWORD@mongo:27017/payflow_fraud?authSource=payflow_fraud" \
   --from-literal=kafka-password="$PAYFLOW_KAFKA_APP_PASSWORD" | $K apply -f -
 $K apply -k "$ROOT/deploy/k8s/overlays/k3d-lab"
@@ -39,4 +43,4 @@ $K -n payflow patch deployment payflow --type merge -p "{\"spec\":{\"template\":
 $K -n payflow rollout status deployment/rail-simulator --timeout=180s
 $K -n payflow rollout status deployment/payflow --timeout=420s
 $K -n payflow get pods -o wide
-echo "deployed: context $CTX, namespace payflow"
+echo "deployed: kubeconfig $LAB_KUBECONFIG, context $CTX, namespace payflow"

@@ -7,6 +7,8 @@ metadata:
 data:
   PAYFLOW_DB_URL: jdbc:postgresql://postgres.payflow-data.svc:5432/payflow
   PAYFLOW_DB_USER: payflow_app
+  # Least privilege: DDL runs as the migration role; the runtime role has DML only (as in docker-compose).
+  SPRING_FLYWAY_USER: payflow_migrator
   PAYFLOW_KAFKA_BOOTSTRAP_SERVERS: kafka.payflow-data.svc:9092
   # Kafka Zero Trust (ADR-023): SASL/SCRAM client identity; the password comes from the Secret.
   SPRING_PROFILES_ACTIVE: kafka-sasl

@@ -1,0 +1,3 @@
+inject  09:20:58: docker restart -t 45 payflow-payflow-1
+payflow-payflow-1
+recover 09:21:05: true
