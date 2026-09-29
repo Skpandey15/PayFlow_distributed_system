@@ -30,8 +30,11 @@ for prefix in payment. fraud. funds. settlement.; do
   $ACL --add --allow-principal User:payflow-app --operation Create --operation Describe --operation Read \
        --operation Write --resource-pattern-type prefixed --topic "$prefix" >/dev/null
 done
+# PREFIXED on purpose: Spring's non-blocking retry derives the retry/DLT consumer groups from the main group
+# (e.g. ledger-service-ledger-service-retry-0). A literal grant silently denied every retry and DLT consumer; found in
+# WP-03 by reconciliation (a lost ledger posting) during failure test F-03.
 for group in payment-service account-service fraud-service settlement-service ledger-service; do
-  $ACL --add --allow-principal User:payflow-app --operation Read --operation Describe --group "$group" >/dev/null
+  $ACL --add --allow-principal User:payflow-app --operation Read --operation Describe --resource-pattern-type prefixed --group "$group" >/dev/null
 done
 
 # 3. Per-service principals: the WP-02 reviewed matrix, applied for real.

@@ -50,5 +50,9 @@ expect "payflow-app cannot create topics outside its namespaces" "TopicAuthoriza
 out=$(client "$(sasl payflow-app "$PAYFLOW_KAFKA_APP_PASSWORD")" "$T /opt/kafka/bin/kafka-topics.sh --bootstrap-server $BS --command-config /tmp/c.properties --list")
 expect "payflow-app sees its own topics" "payment.events" "$out"
 
+# Regression guard (WP-03 F-03 finding): Spring's retry/DLT consumers use derived groups; the app must be allowed them.
+out=$(client "$(sasl payflow-app "$PAYFLOW_KAFKA_APP_PASSWORD")" "$T $CONS --topic funds.events-ledger-service-retry-0 --group ledger-service-ledger-service-retry-0")
+refute "payflow-app may use its derived retry/DLT consumer groups" "GroupAuthorizationException|Not authorized to access group" "$out"
+
 echo "---- $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

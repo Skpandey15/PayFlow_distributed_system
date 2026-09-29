@@ -1,0 +1,20 @@
+scenario=F06-settlement-unavailable inject_at=60s fault=90s load=3m
+time_to_quiet_after_recover_s=447
+report=/d/PayFlow_distributed_system/performance/results/20260929-113433-degraded-fault-F06-settlement-unavailable
+acceptance_by_status={"201": 3601.225}
+shed_by_policy={}
+saga_outcomes={"COMPLETED": 3611.968}
+completion_p99_ms={"value": 359954.722}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 1447.329}
+recovery_held={}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 6960.274}
+dead_lettered={"settlement.commands": 1444.579}
+rail_outcomes={"ACCEPTED": 3628.658, "SETTLEMENT_RAIL_UNAVAILABLE": 3.039, "SETTLEMENT_RAIL_CIRCUIT_OPEN": 6799.167}
+max_outbox_age_s={"value": 0.0}
+alerts_fired={"PaymentAcceptanceBudgetSlowBurn": 1.0, "PaymentCompletionSlow": 1.0, "DeadLettersAppearing": 1.0, "DeadLetterSpike": 1.0}
+reconciliation={"runId":"01a0ebcc-ef4e-7b05-b126-64d86f525bf3","skipped":false,"duration":"PT0.225749S","recordsChecked":220392,"findingsByCheck":{}}
+open_mismatches=none
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

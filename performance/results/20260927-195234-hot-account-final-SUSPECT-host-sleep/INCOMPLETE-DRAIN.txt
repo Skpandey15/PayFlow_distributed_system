@@ -1,0 +1,2 @@
+NOTE: host went down ~60 s after load end; drain not observed; 13,763 sagas open at load end.
+Suspect: host suspended during/after the run (9 s GC pause and 45 ms connection hold are unlike every other run; Prometheus data stops 60 s after load end). Excluded; re-run as hot-account-final2.

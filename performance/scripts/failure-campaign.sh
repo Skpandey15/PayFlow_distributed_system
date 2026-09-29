@@ -5,9 +5,10 @@
 #   ENV_FILE=.env performance/scripts/failure-campaign.sh [scenario-ids...]
 set -uo pipefail
 DIR=$(cd "$(dirname "$0")" && pwd)
-RAIL=http://localhost:${PAYFLOW_RAIL_HOST_PORT:-8090}
-faults() { printf "curl -s -X POST $RAIL/admin/faults -H 'Content-Type: application/json' -d '%s'" "$1"; }
-HEAL_RAIL="curl -s -X DELETE $RAIL/admin/faults"
+# Faults are injected from inside the compose network (via the app container's wget): the host port 8090 may belong to
+# something else on the lab host (it did: a Jenkins instance, which invalidated the first F-06 run).
+faults() { printf "docker exec payflow-payflow-1 wget -qO- --header='Content-Type: application/json' --post-data='%s' http://settlement-rail:8090/admin/faults" "$1"; }
+HEAL_RAIL="$(faults '{}')"  # empty fault set = healthy rail (simulator defaults)
 run() { echo "=== $(date -u +%T) $1"; bash "$DIR/failure-scenario.sh" "$@" | grep -E "scenario=|time_to_quiet|acceptance_by_status|saga_outcomes|completion_p99|alerts_fired|open_mismatches|double_|settled_without|dead_lettered|max_outbox_age|rail_outcomes|recovery_" ; }
 
 want() { [ $# -eq 0 ] || [[ " ${SELECTED[*]} " == *" $1 "* ]]; }

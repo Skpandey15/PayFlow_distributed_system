@@ -6,4 +6,5 @@ PASS  fraud-service cannot forge funds.events (single writer per topic)
 PASS  ledger-service CAN read funds.events (its granted stream)
 PASS  payflow-app cannot create topics outside its namespaces
 PASS  payflow-app sees its own topics
----- 8 passed, 0 failed
+PASS  payflow-app may use its derived retry/DLT consumer groups
+---- 9 passed, 0 failed

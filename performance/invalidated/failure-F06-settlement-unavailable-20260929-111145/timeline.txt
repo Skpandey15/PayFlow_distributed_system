@@ -1,0 +1,30 @@
+inject  05:42:45: curl -s -X POST http://localhost:8090/admin/faults -H 'Content-Type: application/json' -d '{"errorRate":1.0,"errorMode":"UNAVAILABLE_503"}'
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=ISO-8859-1"/>
+<title>Error 403 No valid crumb was included in the request</title>
+</head>
+<body><h2>HTTP ERROR 403 No valid crumb was included in the request</h2>
+<table>
+<tr><th>URI:</th><td>/admin/faults</td></tr>
+<tr><th>STATUS:</th><td>403</td></tr>
+<tr><th>MESSAGE:</th><td>No valid crumb was included in the request</td></tr>
+<tr><th>SERVLET:</th><td>Stapler</td></tr>
+</table>
+<hr/><a href="https://jetty.org/">Powered by Jetty:// 12.1.8</a><hr/>
+
+</body>
+</html>
+recover 05:44:17: curl -s -X DELETE http://localhost:8090/admin/faults
+<html><head><meta http-equiv='refresh' content='1;url=/login?from=%2Fadmin%2Ffaults'/><script id='redirect' data-redirect-url='/login?from=%2Fadmin%2Ffaults' src='/static/286af24c/scripts/redirect.js'></script></head><body style='background-color:white; color:white;'>
+Authentication required
+<!--
+You are authenticated as: anonymous
+Groups that you are in:
+  anonymous
+Permission you need to have (but didn't): hudson.model.Hudson.Read
+ ... which is implied by: hudson.security.Permission.GenericRead
+ ... which is implied by: hudson.model.Hudson.Administer
+-->
+
+</body></html>                                                                                                                                                                                                                                                                                                            

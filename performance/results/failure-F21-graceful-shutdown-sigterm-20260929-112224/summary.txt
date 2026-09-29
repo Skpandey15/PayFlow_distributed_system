@@ -1,0 +1,20 @@
+scenario=F21-graceful-shutdown-sigterm inject_at=60s fault=15s load=3m
+time_to_quiet_after_recover_s=238
+report=/d/PayFlow_distributed_system/performance/results/20260929-112224-degraded-fault-F21-graceful-shutdown-sigterm
+acceptance_by_status={"201": 3077.855}
+shed_by_policy={}
+saga_outcomes={"COMPLETED": 3115.452}
+completion_p99_ms={"value": 54768.412}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 0.0}
+recovery_held={}
+events_failed={}
+dead_lettered={}
+rail_outcomes={"ACCEPTED": 3099.194}
+max_outbox_age_s={"value": 0.0}
+alerts_fired={"ReconciliationCriticalMismatch": 1.0, "PaymentAcceptanceBudgetSlowBurn": 1.0, "PaymentCompletionSlow": 1.0}
+reconciliation={"runId":"01a0ebbd-80d5-73cd-baa7-3d5ddbde15c5","skipped":false,"duration":"PT0.21624S","recordsChecked":205687,"findingsByCheck":{"CAPTURE_POSTED_TO_LEDGER":1,"LEDGER_MATCHES_BALANCE":2}}
+open_mismatches=CAPTURE_POSTED_TO_LEDGER:1,LEDGER_MATCHES_BALANCE:2
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

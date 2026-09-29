@@ -1,0 +1,12 @@
+05:22:05 Lock:transactionid=1 CPU:-=1 
+05:22:15 Lock:transactionid=2 CPU:-=1 
+05:22:25 CPU:-=3 IO:WalSync=1 Lock:transactionid=1 
+05:22:36 CPU:-=3 Lock:transactionid=1 
+05:22:46 Client:ClientRead=1 Lock:transactionid=1 CPU:-=1 
+05:22:56 Lock:transactionid=2 CPU:-=2 Timeout:VacuumDelay=1 
+05:23:07 LWLock:WALWrite=4 Lock:transactionid=2 IO:WalSync=1 CPU:-=1 
+05:23:17 Lock:transactionid=2 CPU:-=2 IO:WalSync=1 
+05:23:27 Lock:transactionid=2 IO:WalSync=1 CPU:-=1 
+05:23:37 LWLock:WALWrite=2 CPU:-=2 IO:WalSync=1 Lock:transactionid=1 
+05:23:48 Lock:transactionid=2 IO:WalSync=1 CPU:-=1 
+05:23:58 IO:WalSync=1 Lock:transactionid=1 CPU:-=1 

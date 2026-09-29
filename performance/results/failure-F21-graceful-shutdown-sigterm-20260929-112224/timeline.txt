@@ -1,0 +1,4 @@
+inject  05:53:24: docker stop -t 45 payflow-payflow-1
+payflow-payflow-1
+recover 05:53:40: docker start payflow-payflow-1
+payflow-payflow-1

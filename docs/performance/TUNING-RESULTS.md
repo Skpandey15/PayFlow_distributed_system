@@ -106,7 +106,7 @@ instead (replicas × 3 ≤ partitions).
 |---|---:|---:|---:|---:|
 | G1 (final default) | 372 ms | 22.2 s | 46 ms | 62 % |
 | SerialGC | **173 ms** | 20.3 s | 221 ms | see run |
-| G1, **two instances** | see `exp-peak-two-instances.log` | | | |
+| G1, **two instances** | **185 ms** | **4.0 s** | 29 ms | – |
 
 - At peak (50/s) one 2-vCPU instance is at its completion capacity (≈ 49/s measured).
 - On only 2 cores, G1's concurrent GC threads compete with request and consumer threads, which shows as tail
@@ -125,7 +125,19 @@ See `performance/results/pg-explain-wp03.txt`:
 - The batched purge uses the primary key.
 - No sequential scans on the hot path; no index was added without such evidence.
 
-## 7. Soak and hot account
+## 7. Hot account (per-subject limit raised to 1,000/s for the experiment; fresh database)
 
-See `soak-final` and `hot-account-final` in `performance/results` and §7 of BOTTLENECK-ANALYSIS. The final
-performance matrix in WP-03-ARCHITECTURE-REVIEW lists the values that were measured.
+| Run | Accepted/s | Shed (503/429) | Acceptance p99 | Completion p99 | Pool pending max | Deadlocks | GC max |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| baseline (`hot-account-baseline`) | 149.4 | 0 (81,852 unfinished after the window) | 314 ms | ≥ 600 s | 143 | 0 | 1,737 ms |
+| final (`hot-account-final2`) | 62.5 | 50,363 | **208 ms** | 238 s | 44 | **0** | 63 ms |
+
+PostgreSQL wait sampling during the final run (`hot-account-final2-lock-samples.txt`) shows `Lock:transactionid`
+(row-lock waits on the hot `account_balance` row) in every sample. The contention the relay previously hid is now
+visible, and intake control keeps it from collapsing the instance. The first final hot-account run was excluded:
+the host suspended during it (a 9 s "GC pause"; data stops 60 s after the load), see `*-SUSPECT-host-sleep`.
+
+## 8. Soak: not executed
+
+The 45-minute soak was **not run** in WP-03 (lab time and host instability). The growth findings in §3 and the
+retention/purge fixes are verified by tests and table sizes, not by a long run. Recorded as MAJOR O-1 in the review.
