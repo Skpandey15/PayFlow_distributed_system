@@ -1,0 +1,4 @@
+inject  05:48:04: docker kill -s KILL payflow-payflow-1
+payflow-payflow-1
+recover 05:48:25: docker start payflow-payflow-1
+payflow-payflow-1

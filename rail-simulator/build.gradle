@@ -1,0 +1,22 @@
+// Test double for the external settlement rails: a separate JDK-only HTTP process (no Spring, no dependencies),
+// used by the docker-compose lab, the Kubernetes lab and in-process by integration tests.
+plugins {
+    id 'java'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('jar') {
+    archiveFileName = 'rail-simulator.jar'
+    manifest {
+        attributes 'Main-Class': 'com.payflow.railsim.RailSimulator'
+    }
+}

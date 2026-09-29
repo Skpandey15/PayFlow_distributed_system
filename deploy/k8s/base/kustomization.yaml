@@ -1,0 +1,17 @@
+# PayFlow application workload. Stateful platform services (PostgreSQL, Kafka, MongoDB, Keycloak) are NOT here:
+# they are operated separately (managed services or dedicated operators) and reached via the ConfigMap endpoints.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: payflow
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - networkpolicy.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: payflow
+    includeSelectors: false

@@ -18,6 +18,9 @@ Logs are ECS JSON (`logging.structured.format.console: ecs`). The `local` and `t
 | outcome (PROCESSED / DUPLICATE / STALE / IGNORED), durationMs | `EventConsumerSupport` | every consumed event |
 | failureCategory, errorCode, retryable | `EventConsumerSupport`, `DeadLetterObserver` | failures |
 | outbox, eventId, errorCode | `OutboxRelay` | publication failures |
+| dependency, circuitBreakerState, deliveryOutcome | `HttpSettlementRailGateway` (logging context) | rail call failures (carried by the consumer's single WARN) |
+| operator, decision, resumedStep, decisionId | `ManualReviewController` (`payflow.ops.audit`) | each manual-review decision |
+| oldestUnpublishedAgeSeconds | `TrafficControlInterceptor` (`payflow.traffic`) | admission open/close transitions |
 
 Real example (live, abridged):
 
@@ -38,6 +41,11 @@ Real example (live, abridged):
 | Saga (`PaymentSagaListener`) | saga transitions, compensation start, stale replies | INFO; WARN on compensation |
 | Recovery (`SagaRecoveryJob`) | re-issue / compensation / escalation | WARN; **ERROR** on MANUAL_REVIEW |
 | Outbox relay | publication failure (per batch) | WARN |
+| Rail resilience (`payflow.resilience`) | circuit breaker **state changes** only | WARN on OPEN, INFO otherwise |
+| Edge (`payflow.traffic`) | admission closed / reopened (transitions only; never per rejected request) | WARN / INFO |
+| Recovery hold | held / resumed transitions | WARN / INFO |
+| Ops audit (`payflow.ops.audit`) | manual-review decisions | INFO |
+| Reconciliation (`payflow.reconciliation`) | runs with findings (summary), failed runs | WARN |
 
 Lower layers throw or translate and never log errors themselves. Spring Kafka's own error-handler logging is lowered to DEBUG, and Hibernate's `SqlExceptionHelper` is off (WP-01), so one failure produces exactly one WARN per attempt and one ERROR when it is final.
 
@@ -48,4 +56,6 @@ Lower layers throw or translate and never log errors themselves. Spring Kafka's 
 - full event payloads (only ids and types)
 - fraud evidence (IP, device, user agent)
 - account balances
+- Kafka SCRAM passwords, client secrets, the monitoring scrape token
+- JDBC parameter values (disabled in the datasource-micrometer span configuration)
 - stack traces for classified failures (only for UNKNOWN, and only in internal logs, never in events)

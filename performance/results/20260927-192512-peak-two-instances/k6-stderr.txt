@@ -1,0 +1,1 @@
+time="2026-09-27T13:55:14Z" level=error msg="Error: token request failed: 400\n\tat fetchToken (file:///scripts/lib/auth.js:12:11(25))\n\tat userToken (file:///scripts/lib/auth.js:23:24(35))\n\tat provision (file:///scripts/lib/payflow.js:46:28(45))\n\tat setup (file:///scripts/scenarios/peak.js:27:19(3))\n" hint="script exception" source=stacktrace

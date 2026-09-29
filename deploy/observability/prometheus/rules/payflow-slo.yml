@@ -1,0 +1,50 @@
+# SLI recording rules (docs/sre/SLI-SLO.md). Ratios are "bad events / all events" so burn rate = ratio / (1 - SLO).
+groups:
+  - name: payflow-sli
+    interval: 30s
+    rules:
+      # A1 acceptance availability: 5xx (including 503 admission shedding) is bad; 4xx is the caller's (429 included).
+      - record: payflow:acceptance_errors:ratio_rate5m
+        expr: |
+          sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST",status=~"5.."}[5m]))
+          / sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST"}[5m]))
+      - record: payflow:acceptance_errors:ratio_rate30m
+        expr: |
+          sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST",status=~"5.."}[30m]))
+          / sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST"}[30m]))
+      - record: payflow:acceptance_errors:ratio_rate1h
+        expr: |
+          sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST",status=~"5.."}[1h]))
+          / sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST"}[1h]))
+      - record: payflow:acceptance_errors:ratio_rate6h
+        expr: |
+          sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST",status=~"5.."}[6h]))
+          / sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST"}[6h]))
+
+      # A2 acceptance latency: share of successful acceptances slower than 300 ms (exact SLO bucket le=0.3).
+      - record: payflow:acceptance_slow:ratio_rate5m
+        expr: |
+          1 - (sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/payments",method="POST",status="201",le="0.3"}[5m]))
+               / sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST",status="201"}[5m])))
+      - record: payflow:acceptance_slow:ratio_rate1h
+        expr: |
+          1 - (sum(rate(http_server_requests_seconds_bucket{uri="/api/v1/payments",method="POST",status="201",le="0.3"}[1h]))
+               / sum(rate(http_server_requests_seconds_count{uri="/api/v1/payments",method="POST",status="201"}[1h])))
+
+      # C1 completion timeliness: share of completed payments that took longer than 30 s end to end.
+      - record: payflow:completion_slow:ratio_rate30m
+        expr: |
+          1 - (sum(rate(payflow_saga_completion_seconds_bucket{outcome="COMPLETED",le="30.0"}[30m]))
+               / sum(rate(payflow_saga_completion_seconds_count{outcome="COMPLETED"}[30m])))
+
+      # C2 completion without human intervention: escalations to manual review per terminal outcome.
+      - record: payflow:manual_review:ratio_rate1h
+        expr: |
+          sum(increase(payflow_saga_recovery_total{action="ESCALATED_TO_MANUAL_REVIEW"}[1h]))
+          / clamp_min(sum(increase(payflow_saga_completion_seconds_count[1h])), 1)
+
+      # P1 publication: share of events published more than 5 s after commit.
+      - record: payflow:publication_slow:ratio_rate30m
+        expr: |
+          1 - (sum(rate(payflow_outbox_publish_delay_seconds_bucket{le="5.0"}[30m]))
+               / sum(rate(payflow_outbox_publish_delay_seconds_count[30m])))

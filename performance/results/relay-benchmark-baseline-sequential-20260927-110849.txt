@@ -1,0 +1,1 @@
+rows=20000 publish_span_s=169.69 drain_total_s=170.09 events_per_s=118 label=baseline-sequential

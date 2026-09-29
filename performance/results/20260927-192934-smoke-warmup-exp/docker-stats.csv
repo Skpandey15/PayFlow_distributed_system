@@ -1,0 +1,13 @@
+1790517574,payflow-payflow-2,16.25%,525.4MiB / 1.5GiB
+1790517574,payflow-payflow-1,7.43%,489.7MiB / 1.5GiB
+1790517574,payflow-kafka-1,4.90%,467.5MiB / 1.5GiB
+1790517574,payflow-postgres-exporter-1,0.00%,8.66MiB / 128MiB
+1790517574,payflow-postgres-1,4.41%,116.1MiB / 1GiB
+1790517574,payflow-mongo-1,1.17%,205.4MiB / 1GiB
+1790517574,payflow-keycloak-1,0.26%,703.8MiB / 10.7GiB
+1790517574,payflow-settlement-rail-1,0.03%,20.13MiB / 256MiB
+1790517574,payflow-tempo-1,0.44%,416.4MiB / 1.5GiB
+1790517574,payflow-grafana-1,1.60%,311.1MiB / 512MiB
+1790517574,payflow-prometheus-1,1.02%,90.47MiB / 1GiB
+1790517574,k3d-tiny-url-serverlb,0.01%,4.793MiB / 10.7GiB
+1790517574,--,--,-- / --

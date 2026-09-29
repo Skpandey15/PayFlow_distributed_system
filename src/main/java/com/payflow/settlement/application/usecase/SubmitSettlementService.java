@@ -4,6 +4,7 @@ import com.payflow.settlement.application.port.in.SubmitSettlementUseCase;
 import com.payflow.settlement.application.port.out.SettlementEventPublisherPort;
 import com.payflow.settlement.application.port.out.SettlementGatewayPort.GatewayInstruction;
 import com.payflow.settlement.application.port.out.SettlementGatewayPort.GatewayResponse;
+import com.payflow.settlement.application.port.out.SettlementGatewayPort.GatewayUnavailableException;
 import com.payflow.settlement.application.port.out.SettlementRepositoryPort;
 import com.payflow.settlement.application.port.out.SettlementRepositoryPort.DuplicateSettlementException;
 import com.payflow.settlement.domain.Settlement;
@@ -54,8 +55,15 @@ public class SubmitSettlementService implements SubmitSettlementUseCase {
             });
         }
 
-        GatewayResponse response = router.gatewayFor(settlement.rail()).submit(new GatewayInstruction(
-                command.paymentId().toString(), settlement.amount(), settlement.paymentReference()));
+        GatewayResponse response;
+        try {
+            response = router.gatewayFor(settlement.rail()).submit(new GatewayInstruction(
+                    command.paymentId().toString(), settlement.amount(), settlement.paymentReference()));
+        } catch (GatewayUnavailableException e) {
+            // Still PENDING and resumable with the same key. Record the evidence, then let the caller retry.
+            recordUnanswered(command, e);
+            throw e;
+        }
 
         return tx.inTransaction(() -> {
             Settlement current = settlements.findByPaymentId(command.paymentId()).orElseThrow();
@@ -70,6 +78,22 @@ public class SubmitSettlementService implements SubmitSettlementUseCase {
             }
             return result(current);
         });
+    }
+
+    private void recordUnanswered(SubmitSettlementCommand command, GatewayUnavailableException failure) {
+        try {
+            tx.inTransaction(() -> {
+                Settlement current = settlements.findByPaymentId(command.paymentId()).orElseThrow();
+                if (!current.status().isTerminal()) {
+                    current.recordUnansweredAttempt(failure.outcome().name(), failure.code(), clock.instant());
+                    settlements.update(current);
+                }
+                return null;
+            });
+        } catch (RuntimeException evidenceNotRecorded) {
+            // Best effort: the rail failure is the error that matters and is rethrown by the caller.
+            failure.addSuppressed(evidenceNotRecorded);
+        }
     }
 
     private Settlement findOrCreate(SubmitSettlementCommand command) {

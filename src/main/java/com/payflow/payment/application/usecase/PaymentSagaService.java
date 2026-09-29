@@ -160,9 +160,11 @@ public class PaymentSagaService implements PaymentSagaUseCase, GetPaymentSagaUse
             PaymentSaga saga = sagas.findByPaymentId(paymentId).orElseThrow(() -> notFound(paymentId));
             Payment payment = payments.findById(paymentId).orElseThrow(() -> notFound(paymentId));
             SagaStep before = saga.step();
+            Instant stepStartedAt = saga.stepStartedAt();
             Optional<Runnable> issueCommands = transition.apply(saga, payment);
             if (issueCommands.isEmpty()) {
-                return new SagaTransition(saga.sagaId(), paymentId, before, saga.step(), false);
+                return new SagaTransition(saga.sagaId(), paymentId, before, saga.step(), false, saga.createdAt(),
+                        stepStartedAt);
             }
             sagas.update(saga);
             var paymentEvents = payment.pullEvents();
@@ -171,7 +173,8 @@ public class PaymentSagaService implements PaymentSagaUseCase, GetPaymentSagaUse
                 events.publish(paymentEvents);
             }
             issueCommands.get().run();
-            return new SagaTransition(saga.sagaId(), paymentId, before, saga.step(), true);
+            return new SagaTransition(saga.sagaId(), paymentId, before, saga.step(), true, saga.createdAt(),
+                    stepStartedAt);
         });
     }
 

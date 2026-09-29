@@ -14,6 +14,10 @@ public record SettlementSnapshot(
         SettlementStatus status,
         String providerReference,
         String declineReason,
+        int submissionAttempts,
+        String lastAttemptOutcome,
+        String lastErrorCode,
+        Instant lastAttemptAt,
         Instant createdAt,
         Instant updatedAt,
         long version) {

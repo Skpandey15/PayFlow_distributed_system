@@ -1,7 +1,10 @@
 package com.payflow.payment.infrastructure;
 
 import com.payflow.payment.application.port.out.AccountLookupPort;
+import com.payflow.payment.application.port.out.CommandPublicationHealthPort;
 import com.payflow.payment.application.port.out.IdempotencyStorePort;
+import com.payflow.payment.application.port.out.ManualReviewAuditPort;
+import com.payflow.payment.application.port.out.SettlementEvidencePort;
 import com.payflow.payment.application.port.out.PaymentEventPublisherPort;
 import com.payflow.payment.application.port.out.PaymentRepositoryPort;
 import com.payflow.payment.application.port.out.PaymentSagaRepositoryPort;
@@ -12,6 +15,8 @@ import com.payflow.payment.application.usecase.PaymentQueryService;
 import com.payflow.payment.application.usecase.PaymentSagaService;
 import com.payflow.payment.application.usecase.PurgeExpiredIdempotencyKeysService;
 import com.payflow.payment.application.usecase.SagaPolicy;
+import com.payflow.payment.application.usecase.ManualReviewService;
+import com.payflow.payment.application.usecase.SagaMonitoringService;
 import com.payflow.payment.application.usecase.SagaRecoveryService;
 import com.payflow.platform.messaging.outbox.OutboxRelay;
 import com.payflow.platform.messaging.outbox.OutboxRelayFactory;
@@ -53,6 +58,11 @@ class PaymentModuleConfiguration {
     }
 
     @Bean
+    SagaMonitoringService sagaMonitoringService(PaymentSagaRepositoryPort sagas, TransactionRunner tx, Clock clock) {
+        return new SagaMonitoringService(sagas, tx, clock);
+    }
+
+    @Bean
     PaymentSagaService paymentSagaService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas,
                                           SagaCommandPort commands, PaymentEventPublisherPort events,
                                           TransactionRunner tx, Clock clock) {
@@ -62,8 +72,18 @@ class PaymentModuleConfiguration {
     @Bean
     SagaRecoveryService sagaRecoveryService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas,
                                             SagaCommandPort commands, PaymentEventPublisherPort events,
-                                            TransactionRunner tx, Clock clock, SagaProperties properties) {
-        return new SagaRecoveryService(payments, sagas, commands, events, tx, clock, properties.toPolicy());
+                                            TransactionRunner tx, Clock clock, SagaProperties properties,
+                                            CommandPublicationHealthPort publication) {
+        return new SagaRecoveryService(payments, sagas, commands, events, tx, clock, properties.toPolicy(), publication);
+    }
+
+    @Bean
+    ManualReviewService manualReviewService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas,
+                                            SagaCommandPort commands, SettlementEvidencePort settlement,
+                                            ManualReviewAuditPort audit, TransactionRunner tx, Clock clock,
+                                            SagaProperties properties) {
+        return new ManualReviewService(payments, sagas, commands, settlement, audit, tx, clock,
+                properties.railIdempotencyWindow());
     }
 
     @Bean

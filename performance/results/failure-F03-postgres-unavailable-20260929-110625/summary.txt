@@ -1,0 +1,20 @@
+scenario=F03-postgres-unavailable inject_at=60s fault=45s load=3m
+time_to_quiet_after_recover_s=209
+report=/d/PayFlow_distributed_system/performance/results/20260929-110625-degraded-fault-F03-postgres-unavailable
+acceptance_by_status={"201": 2748.629, "503": 844.403}
+shed_by_policy={"concurrency": 187.208, "admission": 0.0}
+saga_outcomes={"COMPLETED": 2780.129}
+completion_p99_ms={"value": 46531.774}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 0.0}
+recovery_held={"value": 1.016}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 0.0, "UNKNOWN": 0.0}
+dead_lettered={}
+rail_outcomes={"ACCEPTED": 2765.903}
+max_outbox_age_s={"value": 0.0}
+alerts_fired={"PaymentAcceptanceBudgetFastBurn": 1.0, "PaymentAcceptanceBudgetSlowBurn": 1.0, "PaymentCompletionSlow": 1.0}
+reconciliation={"runId":"01a0ebae-ddfd-75ec-81ec-e2509d96b21d","skipped":false,"duration":"PT0.154775S","recordsChecked":166143,"findingsByCheck":{"CAPTURE_POSTED_TO_LEDGER":1,"LEDGER_MATCHES_BALANCE":2}}
+open_mismatches=CAPTURE_POSTED_TO_LEDGER:1,LEDGER_MATCHES_BALANCE:2
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

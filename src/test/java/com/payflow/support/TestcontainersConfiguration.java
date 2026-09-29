@@ -1,12 +1,16 @@
 package com.payflow.support;
 
+import com.payflow.railsim.RailSimulator;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
+import org.springframework.test.context.DynamicPropertyRegistrar;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
+
+import java.io.IOException;
 
 /**
  * Real PostgreSQL, MongoDB and Kafka (KRaft) for integration tests. In-memory substitutes (H2, embedded or
@@ -33,5 +37,19 @@ public class TestcontainersConfiguration {
     @ServiceConnection
     KafkaContainer kafkaContainer() {
         return new KafkaContainer(DockerImageName.parse("apache/kafka:4.2.0"));
+    }
+
+    /**
+     * The external settlement rails: the same simulator the lab runs as a container, here in-process on a random
+     * port. PayFlow still reaches it over real HTTP, so timeouts, resets and slow answers are genuine network behaviour.
+     */
+    @Bean(destroyMethod = "stop")
+    RailSimulator railSimulator() throws IOException {
+        return new RailSimulator().start(0);
+    }
+
+    @Bean
+    DynamicPropertyRegistrar railSimulatorUrl(RailSimulator rail) {
+        return registry -> registry.add("payflow.settlement.rail.base-url", () -> "http://localhost:" + rail.port());
     }
 }

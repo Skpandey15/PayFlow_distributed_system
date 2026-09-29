@@ -27,6 +27,10 @@ public final class Settlement {
     private SettlementStatus status;
     private String providerReference;
     private String declineReason;
+    private int submissionAttempts;
+    private String lastAttemptOutcome;
+    private String lastErrorCode;
+    private Instant lastAttemptAt;
     private Instant updatedAt;
 
     private Settlement(SettlementSnapshot s) {
@@ -38,6 +42,10 @@ public final class Settlement {
         this.status = Objects.requireNonNull(s.status(), "status");
         this.providerReference = s.providerReference();
         this.declineReason = s.declineReason();
+        this.submissionAttempts = s.submissionAttempts();
+        this.lastAttemptOutcome = s.lastAttemptOutcome();
+        this.lastErrorCode = s.lastErrorCode();
+        this.lastAttemptAt = s.lastAttemptAt();
         this.createdAt = Objects.requireNonNull(s.createdAt(), "createdAt");
         this.updatedAt = Objects.requireNonNull(s.updatedAt(), "updatedAt");
         this.version = s.version();
@@ -49,7 +57,7 @@ public final class Settlement {
             throw new DomainRuleViolationException("SETTLEMENT_AMOUNT_NOT_POSITIVE", "Settlement amount must be positive");
         }
         return new Settlement(new SettlementSnapshot(Identifiers.timeOrderedUuid(), paymentId, rail, amount,
-                paymentReference, SettlementStatus.PENDING, null, null, now, now, 0L));
+                paymentReference, SettlementStatus.PENDING, null, null, 0, null, null, null, now, now, 0L));
     }
 
     public static Settlement rehydrate(SettlementSnapshot snapshot) {
@@ -58,7 +66,8 @@ public final class Settlement {
 
     public SettlementSnapshot snapshot() {
         return new SettlementSnapshot(id, paymentId, rail, amount, paymentReference, status, providerReference,
-                declineReason, createdAt, updatedAt, version);
+                declineReason, submissionAttempts, lastAttemptOutcome, lastErrorCode, lastAttemptAt, createdAt, updatedAt,
+                version);
     }
 
     public void complete(String providerReference, Instant now) {
@@ -69,14 +78,36 @@ public final class Settlement {
         }
         this.status = SettlementStatus.COMPLETED;
         this.providerReference = providerReference;
-        this.updatedAt = now;
+        answered(now);
     }
 
     public void decline(String reason, Instant now) {
         requirePending();
         this.status = SettlementStatus.DECLINED;
         this.declineReason = (reason == null || reason.isBlank()) ? "DECLINED_BY_RAIL" : reason;
-        this.updatedAt = now;
+        answered(now);
+    }
+
+    /**
+     * A submission got no answer. The settlement stays PENDING (resumable with the same idempotency key); what we
+     * record is the evidence an operator needs later: did the instruction provably not leave (NOT_SENT) or may the
+     * rail have processed it (UNKNOWN)?
+     */
+    public void recordUnansweredAttempt(String deliveryOutcome, String errorCode, Instant now) {
+        requirePending();
+        submissionAttempts++;
+        lastAttemptOutcome = deliveryOutcome;
+        lastErrorCode = errorCode;
+        lastAttemptAt = now;
+        updatedAt = now;
+    }
+
+    private void answered(Instant now) {
+        submissionAttempts++;
+        lastAttemptOutcome = "ANSWERED";
+        lastErrorCode = null;
+        lastAttemptAt = now;
+        updatedAt = now;
     }
 
     private void requirePending() {
@@ -120,5 +151,25 @@ public final class Settlement {
 
     public long version() {
         return version;
+    }
+
+    public int submissionAttempts() {
+        return submissionAttempts;
+    }
+
+    public String lastAttemptOutcome() {
+        return lastAttemptOutcome;
+    }
+
+    public String lastErrorCode() {
+        return lastErrorCode;
+    }
+
+    public Instant lastAttemptAt() {
+        return lastAttemptAt;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
     }
 }

@@ -1,0 +1,38 @@
+# Lab Prometheus. 5s scrape so short load-test phases have enough samples; production would use 15-30s.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # PayFlow requires a bearer token with scope ops:metrics on /actuator/prometheus (Zero Trust: the scraper is a
+  # client like any other). Prometheus obtains it with client credentials; the secret is written to a file at start.
+  - job_name: payflow
+    metrics_path: /actuator/prometheus
+    oauth2:
+      client_id: payflow-monitoring
+      client_secret_file: /prometheus/.monitoring-client-secret
+      token_url: http://keycloak:8081/realms/payflow/protocol/openid-connect/token
+    static_configs:
+      - targets: ["payflow:8080"]
+
+  # Scale-out experiments only: a second instance started with `docker compose run --name payflow-payflow-2`.
+  # Separate job so PayFlowTargetDown (job=payflow) does not fire when it is not running.
+  - job_name: payflow-scaleout
+    metrics_path: /actuator/prometheus
+    oauth2:
+      client_id: payflow-monitoring
+      client_secret_file: /prometheus/.monitoring-client-secret
+      token_url: http://keycloak:8081/realms/payflow/protocol/openid-connect/token
+    static_configs:
+      - targets: ["payflow-payflow-2:8080"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

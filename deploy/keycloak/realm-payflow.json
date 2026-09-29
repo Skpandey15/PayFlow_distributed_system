@@ -137,6 +137,22 @@
         "include.in.token.scope": "true",
         "display.on.consent.screen": "false"
       }
+    },
+    {
+      "name": "ops:manual-review",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "ops:reconciliation",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
     }
   ],
   "clients": [
@@ -187,7 +203,9 @@
         "ledger:read",
         "fraud:read",
         "ops:dlq-replay",
-        "ops:metrics"
+        "ops:metrics",
+        "ops:manual-review",
+        "ops:reconciliation"
       ],
       "optionalClientScopes": []
     },
@@ -204,6 +222,22 @@
         "basic",
         "payflow-api-audience",
         "funds:deposit"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "payflow-monitoring",
+      "name": "Metrics scraper (Prometheus); read-only metrics, nothing else",
+      "publicClient": false,
+      "secret": "${PAYFLOW_MONITORING_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": [
+        "basic",
+        "payflow-api-audience",
+        "ops:metrics"
       ],
       "optionalClientScopes": []
     }

@@ -41,7 +41,8 @@ public final class FailureClassifier {
                 : new PermanentEventProcessingException(category, code, message, failure);
     }
 
-    static FailureCategory categoryOf(Throwable failure) {
+    /** Also used by the HTTP boundary, so synchronous and asynchronous failures share one taxonomy. */
+    public static FailureCategory categoryOf(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
             if (t instanceof ContractViolation) {
                 return FailureCategory.CONTRACT_VIOLATION;

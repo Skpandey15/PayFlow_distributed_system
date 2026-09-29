@@ -24,5 +24,7 @@ COPY --from=layers --chown=10001:10001 /workspace/extracted/application/ ./
 USER 10001:10001
 EXPOSE 8080
 # Container-aware heap sizing; crash fast on OOM so the orchestrator restarts a clean JVM.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+# G1 explicitly (the ergonomic default below 1792 MiB is SerialGC; measured in WP-03 TUNING-RESULTS: 38.6 s pause
+# under stress with Serial vs 71 ms with G1). 70 % heap leaves room for metaspace, threads and direct buffers.
+ENV JAVA_TOOL_OPTIONS="-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

@@ -82,6 +82,27 @@ Other controls:
 
 **Accepted gap (review K1).** Local Kafka is PLAINTEXT with no authorizer, and the monolith uses one Kafka identity. The ACL matrix is enforced when contexts deploy separately (platform WP).
 
+## 4b. WP-03 hardening (implemented and verified)
+
+| Control | Implementation | Evidence |
+|---|---|---|
+| Kafka authentication | SASL/SCRAM-SHA-512 on every client listener; credentials only from the environment | `deploy/kafka/verify-security.sh` (wrong password rejected; PLAINTEXT client refused) |
+| Kafka authorization | StandardAuthorizer, deny by default; `payflow-app` limited to PayFlow topic prefixes and its groups; per-service principals with the WP-02 matrix | same script: an ungranted principal cannot write; ledger-service cannot read `fraud.commands`; fraud-service cannot forge `funds.events`; the app cannot create foreign topics |
+| Metrics endpoint | `/actuator/prometheus` needs `ops:metrics`; Prometheus authenticates with its own client (`payflow-monitoring`, metrics scope only) | SecurityIT, live scrape |
+| Operations authorization | separate scopes `ops:manual-review`, `ops:reconciliation`, `ops:dlq-replay` (least privilege, not "admin"); route rules plus use-case checks | ManualReviewIT, ReconciliationIT |
+| Audit | manual-review decisions append-only (runtime role has INSERT/SELECT only) with operator, reason, ticket, frozen evidence | ManualReviewIT |
+| Abuse protection | per-subject rate limits (payments 20/s; ops 10/min) | TrafficControlIT |
+| Kubernetes | restricted Pod Security, non-root, read-only root FS, no capabilities, no ServiceAccount token, default-deny NetworkPolicy | `deploy/k8s` (rendered; not deployed to a cluster in WP-03) |
+| Telemetry privacy | JDBC spans without parameter values; no ids as metric labels; DLT headers sanitized (WP-02) | configuration |
+
+**Not production Zero Trust yet, stated plainly:**
+- Kafka traffic is **not encrypted** (SASL_PLAINTEXT on the docker network; TLS/mTLS deferred, ADR-023).
+- The monolith uses **one** Kafka identity.
+- Keycloak runs in dev mode over HTTP.
+- Secrets live in a local `.env`.
+- The operator ops API has no four-eyes approval.
+- The rail simulator's admin API is unauthenticated (lab-only test double).
+
 ## 5. Deliberately deferred (WP-02/03 and platform WPs)
 
 | Capability | Plan |
@@ -89,14 +110,14 @@ Other controls:
 | Workload identity | Kubernetes projected ServiceAccount tokens or SPIFFE/SPIRE, exchanged for scoped JWTs (short-lived credentials, no static client secrets) |
 | mTLS | Service mesh (Istio or Linkerd) between pods. Complements, but does not replace, JWT authorisation |
 | Network | Kubernetes NetworkPolicies, default deny |
-| Kafka | ACLs per topic and principal (WP-02) |
+| Kafka | ~~ACLs per topic and principal~~ done in WP-03 (ADR-023); remaining: TLS/mTLS, per-service identities at extraction, credential rotation |
 | Secrets | External Secrets Operator or Vault. Database credentials rotated through dynamic secrets |
 | Audit | An append-only audit trail of security-relevant actions (who cancelled or froze what) |
-| Rate limiting | Per-client quotas (WP-03) |
+| Rate limiting | ~~Per-client quotas~~ per-subject limits done in WP-03 (in-process); cluster-wide quotas belong in the API gateway |
 
 ## 6. Local-development relaxations (must NOT reach production)
 
 - The `payflow-customer-app` client has `directAccessGrantsEnabled` (password grant) for curl demos. Disable it; use Authorization Code with PKCE only.
 - Keycloak runs `start-dev` over HTTP. Production needs TLS and a real database.
 - Swagger UI and `/v3/api-docs` are public. Disable them with `springdoc.api-docs.enabled=false` in production.
-- Kafka runs PLAINTEXT on 127.0.0.1 with no ACLs (see §4).
+- Kafka uses SASL_PLAINTEXT (authenticated and authorized, but unencrypted) and has a loopback-only bootstrap listener with a super user (ADR-023). Production: SASL_SSL or mTLS.

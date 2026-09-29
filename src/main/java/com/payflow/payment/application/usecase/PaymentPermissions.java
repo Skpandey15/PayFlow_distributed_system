@@ -12,6 +12,8 @@ public final class PaymentPermissions {
     public static final String WRITE = "payments:write";
     /** See every payment regardless of initiator (support/operations). */
     public static final String ADMIN = "payments:admin";
+    /** Operators who may inspect and resolve manual-review cases (WP-03). Separate from ADMIN: least privilege. */
+    public static final String MANUAL_REVIEW = "ops:manual-review";
 
     private PaymentPermissions() {
     }

@@ -1,0 +1,4 @@
+inject  05:31:31: docker stop payflow-kafka-1
+payflow-kafka-1
+recover 05:33:03: docker start payflow-kafka-1
+payflow-kafka-1

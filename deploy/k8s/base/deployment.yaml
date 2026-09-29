@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payflow
+  labels:
+    app.kubernetes.io/name: payflow
+spec:
+  # Two replicas survive one pod or node loss (with the anti-affinity below). That is NOT high availability by itself:
+  # PostgreSQL, Kafka and the IdP must be highly available too (WP-03-ARCHITECTURE-REVIEW).
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payflow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payflow
+    spec:
+      serviceAccountName: payflow
+      automountServiceAccountToken: false
+      # preStop (10s) + graceful drain (25s per phase, relay batch bounded by the 5s send timeout) < 45s.
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: payflow
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: payflow
+      containers:
+        - name: payflow
+          image: payflow:wp03
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: payflow-config
+          env:
+            - name: PAYFLOW_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: payflow-secrets, key: db-password}
+            - name: PAYFLOW_MONGO_URI
+              valueFrom:
+                secretKeyRef: {name: payflow-secrets, key: mongo-uri}
+          # Requests = the measured footprint of one instance (CAPACITY-PLAN.md). No CPU limit on purpose (CFS
+          # throttling adds tail latency); memory limit = request (heap + metaspace + threads + direct buffers).
+          resources:
+            requests:
+              cpu: "2"
+              memory: 1536Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          # Startup: JVM + Flyway validation + listener start. Liveness/readiness only begin after it passes.
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 5
+            failureThreshold: 36
+          # Liveness = the process can make progress. Never includes dependencies: a DB outage must not restart pods.
+          livenessProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness = can serve payments (PostgreSQL). Kafka is deliberately excluded: the outbox absorbs a broker
+          # outage and admission control (503) protects the backlog. DOWN automatically during graceful shutdown.
+          readinessProbe:
+            httpGet: {path: /actuator/health/readiness, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              # Keep serving while endpoints and load balancers stop routing here, then begin the graceful drain.
+              sleep:
+                seconds: 10
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

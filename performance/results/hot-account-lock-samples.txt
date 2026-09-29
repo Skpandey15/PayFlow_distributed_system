@@ -1,0 +1,6 @@
+
+
+
+
+CPU:-|3 LWLock:WALWrite|1 
+CPU:-|2 Client:ClientRead|1 Lock:transactionid|1 Timeout:VacuumDelay|1 

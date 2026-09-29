@@ -38,16 +38,18 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
  * plus bounded-context isolation: a context may reach another context only through that context's
  * published inbound ports ({@code application.port.in}), and only from its own outbound adapters.
  */
-@AnalyzeClasses(packages = "com.payflow", importOptions = ImportOption.DoNotIncludeTests.class)
+@AnalyzeClasses(packages = "com.payflow", importOptions = {ImportOption.DoNotIncludeTests.class,
+        ImportOption.DoNotIncludeJars.class})
 class ArchitectureTest {
 
-    static final List<String> CONTEXTS = List.of("payment", "account", "fraud", "ledger", "settlement");
+    static final List<String> CONTEXTS = List.of("payment", "account", "fraud", "ledger", "settlement", "reconciliation");
 
     private static final String[] FRAMEWORKS = {
             "org.springframework..", "jakarta.persistence..", "org.hibernate..", "org.bson..", "com.mongodb..",
             "jakarta.servlet..", "jakarta.validation..", "tools.jackson..", "com.fasterxml.jackson..",
             "io.swagger..", "org.slf4j..", "org.apache.kafka..", "io.github.resilience4j..",
-            "io.lettuce..", "redis.clients..", "io.confluent..", "io.micrometer.."};
+            "io.lettuce..", "redis.clients..", "io.confluent..", "io.micrometer..", "io.opentelemetry..",
+            "io.prometheus.."};
 
     // ---------------------------------------------------------------- Clean Architecture layering
 
@@ -243,6 +245,9 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule no_binary_floating_point_fields = noFields()
+            // Tuning knobs (breaker thresholds, backoff multipliers) are ratios, not money: composition-root
+            // configuration is exempt, everything that can carry an amount is not.
+            .that().areDeclaredInClassesThat().resideOutsideOfPackage("com.payflow..infrastructure..")
             .should().haveRawType(double.class).orShould().haveRawType(float.class)
             .orShould().haveRawType(Double.class).orShould().haveRawType(Float.class)
             .because("money is BigDecimal; binary floating point cannot represent 0.10 exactly");
@@ -252,6 +257,30 @@ class ArchitectureTest {
             .should().callConstructor(BigDecimal.class, double.class)
             .orShould().callMethod(BigDecimal.class, "valueOf", double.class)
             .because("new BigDecimal(0.1) is 0.1000000000000000055511151231257827...");
+
+    // ---------------------------------------------------------------- WP-03 resilience and observability boundaries
+
+    @ArchTest
+    static final ArchRule resilience_lives_only_at_outbound_boundaries = noClasses()
+            .that().resideOutsideOfPackages("com.payflow..adapter.out..", "com.payflow..infrastructure..",
+                    "com.payflow.platform.web..")
+            .should().dependOnClassesThat().resideInAPackage("io.github.resilience4j..")
+            .because("circuit breakers, retries and bulkheads protect remote calls; domain, use cases, repositories "
+                    + "and Kafka consumers must not be wrapped (Kafka has its own retry/DLT topology)");
+
+    @ArchTest
+    static final ArchRule telemetry_sdks_stay_out_of_the_core = noClasses()
+            .that().resideInAnyPackage("com.payflow..domain..", "com.payflow..application..", "com.payflow.contracts..")
+            .should().dependOnClassesThat().resideInAnyPackage("io.opentelemetry..", "io.prometheus..",
+                    "io.micrometer..")
+            .because("metrics and traces are recorded at adapter boundaries; business code stays instrument-free");
+
+    @ArchTest
+    static final ArchRule inbound_adapters_never_use_outbound_ports = noClasses()
+            .that().resideInAPackage("com.payflow..adapter.in..")
+            .should().dependOnClassesThat().resideInAPackage("com.payflow..application.port.out..")
+            .because("operations and API controllers act only through use cases (authorisation, audit, "
+                    + "idempotency live there), never directly on repositories or gateways");
 
     @ArchTest
     static final ArchRule no_field_injection = noFields()

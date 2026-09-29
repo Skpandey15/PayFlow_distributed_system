@@ -1,0 +1,3 @@
+docker: Error response from daemon: invalid volume specification: 'D:\PayFlow_distributed_system\performance\k6:/scripts:ro'
+
+Run 'docker run --help' for more information

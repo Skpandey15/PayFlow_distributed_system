@@ -11,8 +11,11 @@ set -eu
 ACL="${KAFKA_BIN:-/opt/kafka/bin}/kafka-acls.sh --bootstrap-server ${BOOTSTRAP:?} --command-config ${ADMIN_CONFIG:?}"
 
 allow_write() { $ACL --add --allow-principal "User:$1" --operation Write --operation Describe --topic "$2"; }
-allow_read()  { $ACL --add --allow-principal "User:$1" --operation Read --operation Describe --topic "$2" \
-                     --group "$3"; }
+# Groups are PREFIXED: Spring's retry/DLT consumers use derived groups (<group>-<group>-retry-N, ...-dlt). A literal
+# grant denies them silently (found in WP-03, failure test F-03).
+allow_read()  { $ACL --add --allow-principal "User:$1" --operation Read --operation Describe --topic "$2";
+                $ACL --add --allow-principal "User:$1" --operation Read --operation Describe \
+                     --resource-pattern-type prefixed --group "$3"; }
 # Retry/DLT topics are per consumer group: <topic>-<group>-retry-N and <topic>-<group>-dlt (prefixed ACL).
 allow_retry() { $ACL --add --allow-principal "User:$1" --operation Read --operation Write --operation Describe \
                      --resource-pattern-type prefixed --topic "$2-$3-"; }

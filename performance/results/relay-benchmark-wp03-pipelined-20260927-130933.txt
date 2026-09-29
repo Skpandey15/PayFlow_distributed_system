@@ -1,0 +1,1 @@
+rows=20000 publish_span_s=3.60 drain_total_s=4.08 events_per_s=5552 label=wp03-pipelined

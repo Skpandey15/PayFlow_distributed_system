@@ -26,6 +26,11 @@ public enum SagaStep {
     CANCELLED,
     MANUAL_REVIEW;
 
+    /** The workflow has finished; MANUAL_REVIEW is deliberately not terminal (a human still has to decide). */
+    public boolean isTerminal() {
+        return this == COMPLETED || this == REJECTED || this == FAILED || this == CANCELLED;
+    }
+
     public boolean isInFlight() {
         return this == AWAITING_RISK || this == AWAITING_FUNDS || this == AWAITING_SETTLEMENT
                 || this == AWAITING_CAPTURE || this == COMPENSATING;

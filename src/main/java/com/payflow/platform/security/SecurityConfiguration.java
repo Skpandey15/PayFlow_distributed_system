@@ -60,7 +60,11 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/ledger/**").hasAuthority("SCOPE_ledger:read")
                         .requestMatchers(HttpMethod.GET, "/api/v1/fraud/**").hasAuthority("SCOPE_fraud:read")
                         .requestMatchers(HttpMethod.POST, "/api/v1/ops/dead-letters/replay").hasAuthority("SCOPE_ops:dlq-replay")
-                        .requestMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/**").hasAuthority("SCOPE_ops:metrics")
+                        .requestMatchers("/api/v1/ops/manual-reviews", "/api/v1/ops/manual-reviews/**")
+                        .hasAuthority("SCOPE_ops:manual-review")
+                        .requestMatchers("/api/v1/ops/reconciliation/**").hasAuthority("SCOPE_ops:reconciliation")
+                        .requestMatchers(HttpMethod.GET, "/actuator/metrics", "/actuator/metrics/**", "/actuator/prometheus")
+                        .hasAuthority("SCOPE_ops:metrics")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(Customizer.withDefaults())

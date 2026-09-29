@@ -1,0 +1,1 @@
+Runs invalidated on 2026-09-27: a stale campaign process (TaskStop did not kill its bash children on Windows) generated load concurrently with the reset campaign. Kept for transparency, excluded from all analysis.

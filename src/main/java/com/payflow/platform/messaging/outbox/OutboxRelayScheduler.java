@@ -38,7 +38,12 @@ public class OutboxRelayScheduler {
         }
         for (OutboxRelay relay : relays) {
             try {
-                relay.publishBatch();
+                // A full batch means more is waiting: keep draining (bounded by the drain budget so one busy outbox
+                // cannot starve the others) instead of sleeping a poll interval between full batches.
+                long deadline = System.nanoTime() + properties.drainBudget().toNanos();
+                while (relay.publishBatch() >= relay.batchSize() && System.nanoTime() < deadline && !paused) {
+                    // continue draining
+                }
             } catch (RuntimeException e) {
                 // e.g. PostgreSQL unreachable: nothing is lost, rows stay in the outbox until the next poll.
                 log.atWarn().addKeyValue("outbox", relay.table()).addKeyValue("errorCode", e.getClass().getSimpleName())
@@ -51,7 +56,7 @@ public class OutboxRelayScheduler {
             initialDelayString = "${payflow.messaging.outbox.purge-interval-ms:3600000}")
     public void purge() {
         for (OutboxRelay relay : relays) {
-            int removed = relay.purgePublishedBefore(clock.instant().minus(properties.retention()));
+            int removed = relay.purgePublishedBefore(clock.instant().minus(properties.retention()), 5_000);
             log.atDebug().addKeyValue("outbox", relay.table()).addKeyValue("removed", removed).log("outbox purged");
         }
     }

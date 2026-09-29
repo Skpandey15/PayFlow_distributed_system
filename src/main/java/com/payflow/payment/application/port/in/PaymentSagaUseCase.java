@@ -3,6 +3,7 @@ package com.payflow.payment.application.port.in;
 import com.payflow.payment.domain.PaymentId;
 import com.payflow.payment.domain.saga.SagaStep;
 
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -25,7 +26,13 @@ public interface PaymentSagaUseCase {
 
     SagaTransition onFundsReleased(PaymentId paymentId);
 
-    /** Result for logging/metrics at the adapter boundary. {@code applied=false} means stale/duplicate reply. */
-    record SagaTransition(UUID sagaId, PaymentId paymentId, SagaStep from, SagaStep to, boolean applied) {
+    /**
+     * Result for logging/metrics at the adapter boundary. {@code applied=false} means stale/duplicate reply.
+     *
+     * @param sagaStartedAt when the saga (payment acceptance) began: end-to-end completion latency is measured from here
+     * @param fromStepStartedAt when the step that just ended was entered (or last re-issued): per-step latency
+     */
+    record SagaTransition(UUID sagaId, PaymentId paymentId, SagaStep from, SagaStep to, boolean applied,
+                          Instant sagaStartedAt, Instant fromStepStartedAt) {
     }
 }

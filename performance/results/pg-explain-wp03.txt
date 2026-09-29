@@ -1,0 +1,48 @@
+-- captured 2026-09-27T14:25:48Z on the lab database during WP-03 (see TUNING-RESULTS §6)
+
+== select count(*) as outbox_rows, pg_size_pretty(pg_total_relation_size('payment.outbox_event')) from payment.outbox_event
+ outbox_rows | pg_size_pretty 
+-------------+----------------
+      235328 | 261 MB
+(1 row)
+
+
+== explain (analyze, buffers, costs off) select id, event_id from payment.outbox_event where published_at is null order by id limit 100
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.332..0.417 rows=61.00 loops=1)
+   Buffers: shared hit=131
+   ->  Index Scan using ix_payment_outbox_unpublished on outbox_event (actual time=0.331..0.406 rows=61.00 loops=1)
+         Index Searches: 1
+         Buffers: shared hit=131
+ Planning:
+   Buffers: shared hit=111
+ Planning Time: 1.010 ms
+ Execution Time: 0.476 ms
+(9 rows)
+
+
+== explain (analyze, buffers, costs off) select * from payment.payment_saga where step in ('AWAITING_RISK','AWAITING_FUNDS','AWAITING_SETTLEMENT','AWAITING_CAPTURE','COMPENSATING') and step_started_at < now() - interval '30 seconds' order by step_started_at limit 50
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Limit (actual time=0.214..0.430 rows=50.00 loops=1)
+   Buffers: shared hit=164
+   ->  Index Scan using ix_payment_saga_in_flight on payment_saga (actual time=0.213..0.421 rows=50.00 loops=1)
+         Index Cond: (step_started_at < (now() - '00:00:30'::interval))
+         Index Searches: 1
+         Buffers: shared hit=164
+ Planning:
+   Buffers: shared hit=257
+ Planning Time: 2.934 ms
+ Execution Time: 0.497 ms
+(10 rows)
+
+
+== explain (analyze, buffers, costs off) select step, count(*), min(step_started_at) from payment.payment_saga where step in ('AWAITING_RISK','AWAITING_FUNDS','AWAITING_SETTLEMENT','AWAITING_CAPTURE','COMPENSATING','MANUAL_REVIEW') group by step
+unable to upgrade to tcp, received 502
+
+== explain (analyze, buffers, costs off) select account_id, available, reserved from account.account_balance where account_id = (select account_id from account.account_balance limit 1) for update
+Error response from daemon: failed to connect to the backend: could not dial Hyper-V socket: connect(b2314a8c-584d-4180-b407-4533dedb0703:016a6eb7-facb-11e6-bd58-64006a7986d3) failed: An operation on a socket could not be performed because the system lacked sufficient buffer space or because a queue was full.
+
+== explain (analyze, buffers, costs off) select b.account_id from account.account_balance b left join (select account_id, currency, sum(case direction when 'CREDIT' then amount else -amount end) balance from ledger.ledger_entry group by account_id, currency) l on l.account_id = b.account_id and l.currency = b.currency where b.available + b.reserved <> coalesce(l.balance, 0)
+Error response from daemon: failed to connect to the backend: could not dial Hyper-V socket: connect(b2314a8c-584d-4180-b407-4533dedb0703:016a6eb7-facb-11e6-bd58-64006a7986d3) failed: An operation on a socket could not be performed because the system lacked sufficient buffer space or because a queue was full.

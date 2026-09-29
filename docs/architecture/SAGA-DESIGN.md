@@ -62,12 +62,50 @@ for each overdue saga:
                      AWAITING_SETTLEMENT / AWAITING_CAPTURE / COMPENSATING: MANUAL_REVIEW (outcome unknown)
 ```
 
-**Why unknown settlement outcomes are never auto-compensated.** A timeout on the rail does not mean "nothing happened". The rail may have moved the money. Releasing the hold would let the payer spend money that is already gone, which is a double spend. The saga escalates and keeps the hold. The operator queries the provider with idempotency key = paymentId, then either re-issues (completes) or confirms the decline. This is verified in `SagaFailureIT.unknownSettlementOutcomeIsEscalatedNotCompensated`.
+**Why unknown settlement outcomes are never auto-compensated.** A timeout on the rail does not mean "nothing happened". The rail may have moved the money. Releasing the hold would let the payer spend money that is already gone, which is a double spend. The saga escalates and keeps the hold. Since WP-03 the operator does this through the manual-review API (ADR-022), with a live rail inquiry as evidence. This is verified in `SagaFailureIT.unknownSettlementOutcomeIsEscalatedNotCompensated`.
 
 Recovery is:
 - **idempotent**: re-issued commands hit natural keys
 - **safe under replicas**: SKIP LOCKED plus the saga version
 - **observable**: `payflow.saga.recovery{action,step}`, WARN/ERROR logs with sagaId and correlationId
+
+## WP-03 additions
+
+### Backpressure-aware recovery (hold)
+
+**Measured problem (WP-03 baseline):**
+- When the payment outbox fell behind, a step's command could sit *unpublished* longer than the step timeout.
+- Recovery then re-issued the command into the same backlog.
+- Over one drain it added 1,275 commands (≈ 23 % extra outbox traffic), which lengthened the backlog it was reacting to.
+
+**Rule:** `SagaRecoveryService` holds while the oldest unpublished payment-outbox command is older than
+`payflow.saga.recovery-hold-age` (15 s).
+- A step cannot be "overdue" if its command never left.
+- Holding is logged on transition only (WARN held / INFO resumed) and counted (`payflow.saga.recovery.held`).
+- It is a symptom of the outbox-age alert, not a separate incident.
+
+Test: `PaymentSagaServiceTest.recoveryHoldsWhileCommandsAreNotBeingPublished`.
+
+### Manual review is resolvable (ADR-022)
+
+Escalation records `escalated_from` (the step whose outcome is unknown). An operator resolves the case with
+`resumeFromManualReview`, which moves the saga back to that step and re-issues its command. There is **no
+transition from MANUAL_REVIEW to a terminal step**: the true outcome is re-established by the idempotent
+participants and the rail's own records.
+
+```
+MANUAL_REVIEW ──RESUME──▶ escalated step (AWAITING_SETTLEMENT | AWAITING_CAPTURE | COMPENSATING) ──▶ normal flow
+MANUAL_REVIEW ──CONFIRM_NOT_SETTLED (rail void first; refused if the rail says ACCEPTED)──▶ AWAITING_SETTLEMENT
+      ──▶ rail declines the voided key ──▶ SettlementDeclined ──▶ COMPENSATING ──▶ FAILED (funds released)
+```
+
+### Metrics
+
+| Metric | Meaning |
+|---|---|
+| `payflow.saga.completion{outcome}` | acceptance → terminal |
+| `payflow.saga.step.duration{step}` | time waiting per step |
+| `payflow.saga.open{step}`, `payflow.saga.oldest.age.seconds{step}` | DB-counted open work |
 
 ## Evidence
 
