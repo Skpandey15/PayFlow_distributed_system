@@ -2,6 +2,7 @@ package com.payflow.settlement.adapter.in.messaging;
 
 import com.payflow.contracts.Topics;
 import com.payflow.contracts.settlement.SettlementMessages.SubmitSettlementV1;
+import com.payflow.platform.messaging.MessagingMetrics;
 import com.payflow.platform.messaging.consumer.ConsumerOutcome;
 import com.payflow.platform.messaging.consumer.EventConsumerSupport;
 import com.payflow.platform.messaging.consumer.IncomingEvent;
@@ -28,7 +29,9 @@ import org.springframework.stereotype.Component;
  * <p>No inbox here, deliberately. Handling spans a network call to the rail, so it cannot be one local
  * transaction with an eventId claim. Idempotency is natural instead: one settlement per payment (unique), a
  * resumable PENDING state, and the provider idempotency key = paymentId. A rail outage is transient: bounded
- * retries, then the DLT, then saga recovery re-issues the command and it resumes.
+ * retries, then the DLT, then saga recovery re-issues the command and it resumes. A rail whose circuit is open is
+ * different: the use case parks the settlement and the record is done (no retry topic, no DLT); the parked
+ * settlement is resumed by {@code ParkedSettlementResumer} once the circuit lets calls through (review R-2).
  */
 @Component
 class SettlementCommandListener {
@@ -38,12 +41,14 @@ class SettlementCommandListener {
     private final EventConsumerSupport consumer;
     private final SubmitSettlementUseCase settlement;
     private final DeadLetterObserver deadLetters;
+    private final MessagingMetrics metrics;
 
     SettlementCommandListener(EventConsumerSupport consumer, SubmitSettlementUseCase settlement,
-                              DeadLetterObserver deadLetters) {
+                              DeadLetterObserver deadLetters, MessagingMetrics metrics) {
         this.consumer = consumer;
         this.settlement = settlement;
         this.deadLetters = deadLetters;
+        this.metrics = metrics;
     }
 
     @RetryableTopic(
@@ -75,8 +80,11 @@ class SettlementCommandListener {
         } catch (IllegalArgumentException e) {
             throw new InvalidEventException("UNKNOWN_SETTLEMENT_METHOD", "Unknown settlement method", e);
         }
-        settlement.submit(new SubmitSettlementCommand(Identifiers.parse(c.paymentId(), "payment id"), method,
-                Money.of(c.amount(), c.currency()), c.reference()));
+        var result = settlement.submit(new SubmitSettlementCommand(Identifiers.parse(c.paymentId(), "payment id"),
+                method, Money.of(c.amount(), c.currency()), c.reference()));
+        if (result.parked()) {
+            metrics.count("payflow.settlement.parked", "method", method.name());
+        }
         return ConsumerOutcome.PROCESSED;
     }
 

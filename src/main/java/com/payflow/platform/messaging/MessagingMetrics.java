@@ -75,6 +75,10 @@ public class MessagingMetrics {
         Counter.builder(name).tags(tags).register(registry).increment();
     }
 
+    public void count(String name, double amount, String... tags) {
+        Counter.builder(name).tags(tags).register(registry).increment(amount);
+    }
+
     public double counterValue(String name, String... tags) {
         Counter c = registry.find(name).tags(tags).counter();
         return c == null ? 0 : c.count();
