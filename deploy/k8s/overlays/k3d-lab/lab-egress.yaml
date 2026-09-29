@@ -1,0 +1,19 @@
+# Lab only: the platform services live outside the cluster on the compose network (Docker bridge 172.16.0.0/12),
+# so the base policy's namespace selectors cannot match them. Production uses the base policy unchanged.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payflow-lab-platform-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: payflow
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 172.16.0.0/12}
+      ports: [{port: 5432}, {port: 29092}, {port: 27017}, {port: 8081}, {port: 4318}]
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: rail-simulator}
+      ports: [{port: 8090}]

@@ -1,0 +1,9 @@
+07:39:02 outbox_event=4317/5120 kB outbox_event=1267/1704 kB outbox_event=528/752 kB processed_event=2131/416 kB processed_event=1067/240 kB processed_event=710/208 kB
+07:44:02 outbox_event=52444/58 MB outbox_event=13294/16 MB outbox_event=6551/7744 kB processed_event=26187/3664 kB processed_event=13104/1880 kB processed_event=6734/1000 kB
+07:49:03 outbox_event=100367/106 MB outbox_event=25292/29 MB outbox_event=12560/14 MB processed_event=50146/6976 kB processed_event=25101/3536 kB processed_event=12740/1832 kB
+07:54:03 outbox_event=148335/167 MB outbox_event=37295/45 MB outbox_event=18551/21 MB processed_event=74231/10 MB processed_event=37108/5184 kB processed_event=18738/2648 kB
+07:59:03 outbox_event=196398/215 MB outbox_event=49304/58 MB outbox_event=24554/27 MB processed_event=98222/13 MB processed_event=49132/6824 kB processed_event=24756/3472 kB
+08:04:03 outbox_event=234455/270 MB outbox_event=59570/73 MB outbox_event=30028/34 MB processed_event=122255/16 MB processed_event=61138/8544 kB processed_event=30746/4360 kB
+08:09:03 outbox_event=292604/330 MB outbox_event=73343/89 MB outbox_event=36560/42 MB processed_event=146258/20 MB processed_event=73156/10136 kB processed_event=36748/5160 kB
+08:14:04 outbox_event=340212/370 MB outbox_event=85323/99 MB outbox_event=42566/48 MB processed_event=170229/23 MB processed_event=85133/12 MB processed_event=42120/5936 kB
+08:19:04 outbox_event=388162/425 MB outbox_event=97342/117 MB outbox_event=48562/55 MB processed_event=194333/26 MB processed_event=97173/13 MB processed_event=48763/6776 kB

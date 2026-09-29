@@ -192,7 +192,9 @@ payflow:
     admission-retry-after: 30s
     # In-flight bulkhead on payment acceptance (0 = off). Value from the WP-03 stress experiment (TUNING-RESULTS.md).
     max-concurrent-payment-requests: ${PAYFLOW_MAX_CONCURRENT_PAYMENT_REQUESTS:48}
-    # Shed intake while any group is this far behind on a main topic (~15-20 s of work at measured drain rates).
+    # Shed intake while any group is this far behind on a main topic. Tested 1,000 (TUNING-RESULTS §9): threshold
+    # admission on a sampled, lagging signal oscillates (admit a burst, close, drain, reopen) and raised burst
+    # acceptance p99 268 -> 1,484 ms for completion p99 136 -> 90 s. Rejected; the real fix is adaptive concurrency.
     admission-max-consumer-lag: ${PAYFLOW_ADMISSION_MAX_CONSUMER_LAG:5000}
   persistence:
     transaction-timeout: 5s
@@ -219,6 +221,8 @@ payflow:
       # Deduplication window: must exceed Kafka topic retention (7 d) + DLT replay window (InboxPurgeJob).
       retention: 8d
       purge-interval-ms: 3600000
+    # Broker-side lag sampling; also the admission-control signal, so it must be fresher than the lag it guards.
+    lag-monitor-interval-ms: 5000
     retry:
       # 1 original + 3 retries at 1s, 3s, 9s (non-blocking retry topics), then the dead-letter topic.
       attempts: 4

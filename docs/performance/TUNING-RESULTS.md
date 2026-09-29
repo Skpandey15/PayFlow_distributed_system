@@ -141,3 +141,27 @@ the host suspended during it (a 9 s "GC pause"; data stops 60 s after the load),
 
 The 45-minute soak was **not run** in WP-03 (lab time and host instability). The growth findings in §3 and the
 retention/purge fixes are verified by tests and table sizes, not by a long run. Recorded as MAJOR O-1 in the review.
+
+## 9. Review P-2 follow-up: tighter lag admission (1,000 records, sampled every 5 s)
+
+Fresh database per run; everything else as the final build.
+
+| Scenario | Setting | Accepted/s | Acceptance p99 | Completion p99 | Drain |
+|---|---|---:|---:|---:|---:|
+| burst | 5,000 / 15 s (final) | 44.2 | 268 ms | 136 s | 30 s |
+| burst | **1,000 / 5 s** | 30.5 | **1,484 ms** | 90 s | 31 s |
+| stress | 5,000 / 15 s (final) | 65.0 | 235 ms | 252 s | 94 s |
+| stress | **1,000 / 5 s** | 53.6 | **129 ms** | **62 s** | 31 s |
+
+- **Under sustained overload the tighter threshold is clearly better:** acceptance p99 −45 %, completion p99 −75 %,
+  a 3× faster drain.
+- **Under bursts it is worse.** The 30-second time series of `burst-p2tuned` shows why:
+  1. At the start of a spike lag is still low, so admission lets 81–95 payments/s through.
+  2. Lag jumps and admission closes (≈ 58 × 503/s).
+  3. The consumers drain and admission reopens.
+  4. The admitted batches hit a CPU-saturated instance: p99 of 201 responses up to 4.1 s.
+
+  That is bang-bang control on a sampled, lagging signal.
+- **Decision:** keep 5,000 (bursts are the common overload shape) and 5 s sampling. P-2 stays open with a better
+  diagnosis. A threshold cannot fix it; a smooth controller can, for example an adaptive concurrency limit (AIMD on
+  the in-flight bulkhead driven by lag or latency) or token-bucket admission sized from the measured drain rate.
