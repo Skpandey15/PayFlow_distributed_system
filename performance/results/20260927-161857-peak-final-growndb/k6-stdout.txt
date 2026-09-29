@@ -1,0 +1,11 @@
+
+window 2026-09-27T10:48:59.669Z .. 2026-09-27T10:57:59.724Z
+http_reqs: {"count":36606,"rate":67.62885775069122}
+payments_throttled: {"count":1,"rate":0.0018474801330571825}
+checks: {"rate":0.9999723939929329,"passes":36223,"fails":1}
+http_req_duration{name:POST /api/v1/payments}: {"p(95)":70.4089575,"p(99)":348.88445513000323,"max":2001.167476,"count":24240,"min":5.130955,"med":14.297504,"p(90)":46.40046990000001}
+http_req_duration: {"count":36606,"min":1.19096,"med":9.6042175,"p(90)":38.6181265,"p(95)":55.19900425,"p(99)":287.71060214999943,"max":2001.167476}
+payments_accepted: {"count":24239,"rate":44.78107094517305}
+iterations: {"count":24249,"rate":44.79954574650362}
+http_req_duration{expected_response:true}: {"med":9.600924,"p(90)":38.553233,"p(95)":55.015408750000006,"p(99)":285.39215255000204,"max":2001.167476,"count":36596,"min":1.19096}
+dropped_iterations: {"count":50,"rate":0.09237400665285912}

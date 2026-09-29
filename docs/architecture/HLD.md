@@ -1,4 +1,4 @@
-# PayFlow: High-Level Design (as of WP-02)
+# PayFlow: High-Level Design (as of WP-03)
 
 ## 1. Purpose and scope
 
@@ -13,7 +13,7 @@ WP-01 delivers the backend foundation:
 - concurrency control
 - architecture governance
 
-Asynchronous processing (WP-02) and resilience and scale (WP-03) are out of scope. This design leaves explicit extension points for them.
+This document grew with the work packages: asynchronous processing was added in WP-02 (§5, §7), and resilience, scale and production engineering in WP-03 (§6, §7b). Detailed designs: WP-01-LLD, WP-02-LLD, WP-03-LLD.
 
 ## 2. Context
 
@@ -83,7 +83,10 @@ WP-01's synchronous `authorize`/`process` endpoints were removed (see WP-02-LLD 
 | Security | JWT verification, per-route scopes, deny-by-default, ownership checks returning 404, least-privilege DB and container |
 | Availability | MongoDB outage degrades only authorization (fail closed); readiness excludes MongoDB; fail-fast timeouts |
 | Evolvability | Clean Architecture per context; ports for events, resilience and remote calls |
-| Observability | ECS JSON logs with traceId, spanId and correlationId; health, liveness and readiness probes; W3C trace context |
+| Observability | ECS JSON logs with traceId, spanId and correlationId; health, liveness and readiness probes; W3C trace context; WP-03: Prometheus (authenticated scrape), Grafana dashboards, Tempo traces, SLO burn-rate alerts (ADR-020) |
+| Performance and overload (WP-03) | pipelined outbox relay; bounded intake (in-flight bulkhead, admission control on outbox age and consumer lag); G1; measured capacity and SLOs (docs/performance, docs/sre) |
+| Resilience (WP-03) | settlement rails over HTTP with timeout, bounded retry with jitter, per-rail circuit breaker, bulkheads; NOT_SENT vs UNKNOWN outcomes (ADR-017) |
+| Financial operations (WP-03) | manual review with rail evidence, no forced outcomes (ADR-022); continuous reconciliation (ADR-021) |
 | Governance | 20 ArchUnit rules plus negative tests proving the rules detect violations |
 
 ## 7. Event backbone (WP-02)
@@ -94,11 +97,36 @@ WP-01's synchronous `authorize`/`process` endpoints were removed (see WP-02-LLD 
 - Retry topics and a sanitized DLT per consumer group, plus a replay API (ADR-014).
 - JSON contracts plus schemas as code (ADR-011/016).
 
+## 7b. Production engineering (WP-03)
+
+```
+             ┌────────────── edge: JWT → per-subject rate limit → admission (outbox age, consumer lag) → in-flight bulkhead
+client ──────┤
+             └─▶ PayFlow (2 vCPU / 1.5 GiB, G1) ──▶ PostgreSQL (authoritative; outbox, inbox, saga, ledger, reconciliation)
+                    │  pipelined relay (5,500 ev/s)          │
+                    ▼                                        │
+                 Kafka (SASL/SCRAM, ACLs) ──▶ consumers (retry topics, DLT) ──▶ saga (recovery holds on backlog)
+                    │
+                    └─ settlement adapter ──HTTP──▶ rail (timeout, retry+jitter, circuit breaker, bulkhead) [simulator in lab]
+Prometheus ◀── /actuator/prometheus (token)   Tempo ◀── OTLP traces   Grafana: 9 dashboards   23 alerts
+```
+
+Measured (docs/performance/TUNING-RESULTS.md):
+- Completion capacity of one instance ≈ 45–50 payments/s (consumer-bound). Acceptance alone ≈ 375/s (CPU-bound).
+- Beyond capacity, load is shed with 503 + Retry-After instead of queueing.
+
+Operations:
+- Manual-review API (`/api/v1/ops/manual-reviews`).
+- Reconciliation (`/api/v1/ops/reconciliation`).
+- Runbooks and alerts (docs/sre).
+- Kubernetes manifests (`deploy/k8s`: restricted pods, probes, PDB, HPA, NetworkPolicy).
+
 ## 8. Roadmap hooks
 
 | Extension point | Used by |
 |---|---|
 | `PaymentEventPublisherPort` (called in-transaction) | Implemented in WP-02 as the outbox adapter |
-| `SettlementGatewayPort` / `DirectEventPublisher` / relay | WP-03 Resilience4j decorators, batching or CDC |
-| `SettlementGatewayPort` (per rail) | WP-03 circuit breaker, bulkhead, timeout and retry per rail |
-| Readiness groups, tracing export flag | WP-03 SLOs and collectors |
+| `SettlementGatewayPort` / relay | Delivered in WP-03 (HTTP rail adapter with Resilience4j; pipelined relay). Next: CDC or sharded relay at 10× (ADR-019) |
+| Per-service Kafka principals (ACL matrix applied) | Service extraction: each context runs with its own identity (ADR-023) |
+| `reconciliation` read model | Incremental reconciliation and finance-approved correction journals |
+| `deploy/k8s` base | Platform WP: operators for PostgreSQL/Kafka, External Secrets, service mesh (mTLS), KEDA |

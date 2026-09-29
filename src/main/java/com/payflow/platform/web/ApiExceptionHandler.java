@@ -1,5 +1,7 @@
 package com.payflow.platform.web;
 
+import com.payflow.platform.messaging.error.FailureCategory;
+import com.payflow.platform.messaging.error.FailureClassifier;
 import com.payflow.shared.application.ConflictException;
 import com.payflow.shared.application.DependencyUnavailableException;
 import com.payflow.shared.application.ForbiddenException;
@@ -74,7 +76,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DependencyUnavailableException.class)
     ResponseEntity<ProblemDetail> unavailable(DependencyUnavailableException e) {
-        log.atWarn().setCause(e).addKeyValue("code", e.code()).log("dependency unavailable");
+        // No stack trace: an outage produces one of these per request, and the cause is known (code). WP-03 load
+        // tests showed stack-trace logging of expected infrastructure failures turning an overload into a log flood.
+        log.atWarn().addKeyValue("code", e.code()).addKeyValue("errorType", e.getClass().getSimpleName())
+                .log("dependency unavailable");
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS)
                 .body(Problems.of(HttpStatus.SERVICE_UNAVAILABLE, e.code(), e.getMessage()));
@@ -90,8 +95,28 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    /**
+     * Anything not mapped above is classified with the same {@link FailureClassifier} the Kafka boundary uses (one
+     * taxonomy for both boundaries). Found under WP-03 stress: pool-acquisition and transaction timeouts
+     * ({@code CannotCreateTransactionException}, {@code TransactionTimedOutException}) reached this handler as 500 +
+     * ERROR with a stack trace, 20,631 times in one run. They are transient infrastructure failures: 503 + Retry-After,
+     * one WARN line, no stack. Only genuinely unknown failures remain 500 + ERROR.
+     */
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> unexpected(Exception e) {
+        FailureCategory category = FailureClassifier.categoryOf(e);
+        if (category == FailureCategory.TRANSIENT_INFRASTRUCTURE) {
+            log.atWarn().addKeyValue("failureCategory", category).addKeyValue("errorType", e.getClass().getSimpleName())
+                    .log("infrastructure temporarily unavailable");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .header(HttpHeaders.RETRY_AFTER, RETRY_AFTER_SECONDS)
+                    .body(Problems.of(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_TEMPORARILY_UNAVAILABLE",
+                            "The service is temporarily unable to process the request. Retry later."));
+        }
+        if (category == FailureCategory.CONCURRENCY) {
+            log.atInfo().addKeyValue("failureCategory", category).log("concurrent modification");
+            return respond(HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION", "The resource was modified concurrently. Retry.");
+        }
         log.error("unhandled exception", e);
         return respond(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
                 "An unexpected error occurred. Quote the correlationId when contacting support.");

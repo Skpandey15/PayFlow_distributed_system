@@ -1,6 +1,7 @@
 package com.payflow.payment.application.usecase;
 
 import com.payflow.payment.application.port.in.RecoverStuckSagasUseCase;
+import com.payflow.payment.application.port.out.CommandPublicationHealthPort;
 import com.payflow.payment.application.port.out.PaymentEventPublisherPort;
 import com.payflow.payment.application.port.out.PaymentRepositoryPort;
 import com.payflow.payment.application.port.out.PaymentSagaRepositoryPort;
@@ -11,6 +12,7 @@ import com.payflow.payment.domain.saga.SagaStep;
 import com.payflow.shared.application.TransactionRunner;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +38,17 @@ public class SagaRecoveryService implements RecoverStuckSagasUseCase {
     private final TransactionRunner tx;
     private final Clock clock;
     private final SagaPolicy policy;
+    private final CommandPublicationHealthPort publication;
 
     public SagaRecoveryService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas, SagaCommandPort commands,
                                PaymentEventPublisherPort events, TransactionRunner tx, Clock clock, SagaPolicy policy) {
+        this(payments, sagas, commands, events, tx, clock, policy, () -> Duration.ZERO);
+    }
+
+    public SagaRecoveryService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas, SagaCommandPort commands,
+                               PaymentEventPublisherPort events, TransactionRunner tx, Clock clock, SagaPolicy policy,
+                               CommandPublicationHealthPort publication) {
+        this.publication = publication;
         this.payments = payments;
         this.sagas = sagas;
         this.commands = commands;
@@ -52,8 +62,17 @@ public class SagaRecoveryService implements RecoverStuckSagasUseCase {
     private record Recovery(RecoveryAction action, Runnable commands) {
     }
 
+    /**
+     * WP-03 backpressure rule: while the oldest unpublished command is older than {@code recoveryHoldAge}, recovery
+     * holds. Measured in the WP-03 baseline: without it, an outbox backlog made steps look overdue, recovery re-issued
+     * their commands into the same backlog (growing it), and after the retry budget rejected valid payments or sent
+     * them to manual review: a self-reinforcing (metastable) failure caused by a slow relay, not by a participant.
+     */
     @Override
     public RecoveryReport recoverOverdueSagas() {
+        if (publication.oldestUnpublishedCommandAge().compareTo(policy.recoveryHoldAge()) > 0) {
+            return RecoveryReport.held();
+        }
         return tx.inTransaction(() -> {
             Instant now = clock.instant();
             List<RecoveredSaga> actions = new ArrayList<>();

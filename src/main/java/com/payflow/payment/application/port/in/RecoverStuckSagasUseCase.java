@@ -17,7 +17,20 @@ public interface RecoverStuckSagasUseCase {
                          int attemptsBefore, RecoveryAction action) {
     }
 
-    record RecoveryReport(List<RecoveredSaga> actions) {
+    /**
+     * @param heldBecauseCommandsUnpublished recovery did not run: outgoing commands are not reaching the broker, so
+     *                                       "overdue" steps are waiting for publication, not for a participant
+     */
+    record RecoveryReport(List<RecoveredSaga> actions, boolean heldBecauseCommandsUnpublished) {
+
+        public RecoveryReport(List<RecoveredSaga> actions) {
+            this(actions, false);
+        }
+
+        public static RecoveryReport held() {
+            return new RecoveryReport(List.of(), true);
+        }
+
         public long count(RecoveryAction action) {
             return actions.stream().filter(a -> a.action() == action).count();
         }

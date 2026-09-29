@@ -7,7 +7,7 @@
 -- everything), so the same migrations work in every environment.
 --
 -- Maintenance rule: edit this file (changing its checksum) whenever a migration adds a table, so Flyway re-applies it.
--- Revision: WP-02 (funds, outbox/inbox, payment saga).
+-- Revision: WP-03 (manual-review audit, reconciliation).
 DO
 $$
 DECLARE
@@ -18,7 +18,10 @@ BEGIN
         RETURN;
     END IF;
 
-    EXECUTE format('GRANT USAGE ON SCHEMA account, payment, ledger, settlement TO %I', runtime_role);
+    EXECUTE format('GRANT USAGE ON SCHEMA account, payment, ledger, settlement, reconciliation TO %I', runtime_role);
+
+    -- Reconciliation: writes only its own findings; reads the other schemas through their existing SELECT grants.
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA reconciliation TO %I', runtime_role);
 
     -- Account: master data, balances, reservations, deposits, outbox and inbox.
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA account TO %I', runtime_role);
@@ -28,6 +31,8 @@ BEGIN
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON payment.payment, payment.payment_saga, payment.outbox_event TO %I', runtime_role);
     EXECUTE format('GRANT SELECT, INSERT, DELETE ON payment.idempotency_record, payment.processed_event TO %I', runtime_role);
     EXECUTE format('GRANT DELETE ON payment.outbox_event TO %I', runtime_role);
+    -- Manual-review audit: append-only for the application (no UPDATE, no DELETE).
+    EXECUTE format('GRANT SELECT, INSERT ON payment.manual_review_decision TO %I', runtime_role);
 
     -- Settlement.
     EXECUTE format('GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA settlement TO %I', runtime_role);

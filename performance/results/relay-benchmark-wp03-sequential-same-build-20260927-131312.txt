@@ -1,0 +1,1 @@
+rows=20000 publish_span_s=189.32 drain_total_s=189.80 events_per_s=106 label=wp03-sequential-same-build

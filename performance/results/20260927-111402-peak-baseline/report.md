@@ -1,0 +1,88 @@
+# Load-test report: 20260927-111402-peak-baseline
+
+Window: 2026-09-27T05:44:04.563000+00:00 to 2026-09-27T05:53:04.583000+00:00 (+342s drain). Rate scale 1.
+
+## Client (k6, open model)
+
+| Metric | Value |
+|---|---|
+| iterations | 24299 |
+| iterations_per_s | 44.874130173572354 |
+| dropped_iterations | 0 |
+| payments_accepted | 24299 |
+| payments_throttled | 0 |
+| payments_rejected_at_api | 0 |
+| checks_pass_rate | 1 |
+| post_p50_ms | 7.33106 |
+| post_p95_ms | 18.416303899999996 |
+| post_p99_ms | 38.09614242 |
+| post_max_ms | 266.4239 |
+
+## Server (Prometheus)
+
+| Metric | Value |
+|---|---|
+| accepted_per_s | 45.2243 |
+| api_5xx_ratio | None |
+| api_post_p50_ms | 7.0 |
+| api_post_p95_ms | 18.6 |
+| api_post_p99_ms | 37.8 |
+| api_get_p99_ms | 4.6 |
+| saga_completed | 3838.7045 |
+| saga_completion_by_outcome | {"outcome=COMPLETED": 3838.7045} |
+| saga_p50_ms | 310751.4 |
+| saga_p95_ms | 600000.0 |
+| saga_p99_ms | 600000.0 |
+| saga_step_p99_ms | {"step=AWAITING_CAPTURE": 441176.8, "step=AWAITING_FUNDS": 441694.1, "step=AWAITING_RISK": 444099.5, "step=AWAITING_SETTLEMENT": 443593.2} |
+| drain_seconds_after_load | 342 |
+| saga_open_at_load_end | {"step=AWAITING_CAPTURE": 1647.0, "step=AWAITING_FUNDS": 5961.0, "step=AWAITING_RISK": 10736.0, "step=AWAITING_SETTLEMENT": 3184.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_after_drain | {"step=AWAITING_CAPTURE": 2874.0, "step=AWAITING_FUNDS": 10184.0, "step=AWAITING_RISK": 2109.0, "step=AWAITING_SETTLEMENT": 5351.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_max | {"step=AWAITING_CAPTURE": 2874.0, "step=AWAITING_FUNDS": 10184.0, "step=AWAITING_RISK": 10736.0, "step=AWAITING_SETTLEMENT": 5351.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| outbox_publish_delay_p50_ms | 124599.4 |
+| outbox_publish_delay_p99_ms | 440611.4 |
+| outbox_publish_delay_p99_by_outbox_ms | {"outbox=account.outbox_event": 970.9, "outbox=payment.outbox_event": 444444.8, "outbox=settlement.outbox_event": 706.7} |
+| outbox_send_p99_ms | 8.6 |
+| outbox_published_per_s | 124.8897 |
+| outbox_backlog_max | {"outbox=account.outbox_event": 10.0, "outbox=payment.outbox_event": 40981.0, "outbox=settlement.outbox_event": 1.0} |
+| outbox_oldest_age_max_s | {"outbox=account.outbox_event": 0.0, "outbox=payment.outbox_event": 395.0, "outbox=settlement.outbox_event": 0.0} |
+| consumer_lag_max_top5 | {"group=payment-service,topic=fraud.events": 1.0, "group=account-service,topic=funds.commands": 0.0, "group=fraud-service,topic=fraud.commands": 0.0, "group=ledger-service,topic=funds.events": 0.0, "group=payment-service,topic=funds.events": 0.0} |
+| consumer_p99_ms | {"consumer=ledger-service": 9.7, "consumer=payment-service": 23.8, "consumer=account-service": 29.0, "consumer=fraud-service": 19.8, "consumer=settlement-service": 32.9} |
+| events_consumed_per_s | 126.5623 |
+| events_failed | {"category=CONCURRENCY": 1.0092} |
+| events_dead_lettered | 0 |
+| hikari_active_max | 8.0 |
+| hikari_pending_max | 0.0 |
+| hikari_acquire_max_ms | 4.7 |
+| hikari_acquire_avg_ms | 0.0 |
+| hikari_usage_avg_ms | 6.1 |
+| hikari_timeouts | 0 |
+| pg_commits_per_s | 608.028 |
+| pg_rollbacks | 2.0088 |
+| pg_deadlocks | 0 |
+| pg_backends_max | 23.0 |
+| mongo_cmd_max_ms | 48.4 |
+| mongo_cmd_avg_ms | 0.6 |
+| jvm_heap_used_max_mb | 171 |
+| jvm_heap_after_gc_max_mb | 107 |
+| jvm_heap_committed_max_mb | 228 |
+| gc_pause_max_ms | 211.0 |
+| gc_pause_total_ms | 3919.9 |
+| gc_count | 1012.2955 |
+| alloc_rate_mb_s | 84.2 |
+| threads_max | 188.0 |
+| process_cpu_avg | 0.3861 |
+| process_cpu_max | 0.534 |
+
+## Containers (docker stats; CPU % of one core)
+
+| Container | CPU avg % | CPU max % | Mem max MiB |
+|---|---|---|---|
+| payflow-grafana-1 | 1.0 | 6.21 | 320 |
+| payflow-kafka-1 | 53.5 | 194.36 | 687 |
+| payflow-keycloak-1 | 1.3 | 75.91 | 794 |
+| payflow-mongo-1 | 13.5 | 55.94 | 374 |
+| payflow-payflow-1 | 78.4 | 110.48 | 566 |
+| payflow-postgres-1 | 26.5 | 78.36 | 263 |
+| payflow-postgres-exporter-1 | 0.3 | 1.81 | 9 |
+| payflow-prometheus-1 | 0.5 | 2.02 | 61 |
+| payflow-tempo-1 | 0.8 | 6.22 | 104 |

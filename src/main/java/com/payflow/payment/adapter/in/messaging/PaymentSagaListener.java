@@ -28,6 +28,9 @@ import org.springframework.kafka.retrytopic.DltStrategy;
 import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Set;
 
 /**
@@ -51,14 +54,16 @@ class PaymentSagaListener {
     private final PaymentSagaUseCase saga;
     private final DeadLetterObserver deadLetters;
     private final MessagingMetrics metrics;
+    private final Clock clock;
 
     PaymentSagaListener(EventConsumerSupport consumer, IdempotentExecutor idempotent, PaymentSagaUseCase saga,
-                        DeadLetterObserver deadLetters, MessagingMetrics metrics) {
+                        DeadLetterObserver deadLetters, MessagingMetrics metrics, Clock clock) {
         this.consumer = consumer;
         this.idempotent = idempotent;
         this.saga = saga;
         this.deadLetters = deadLetters;
         this.metrics = metrics;
+        this.clock = clock;
     }
 
     @RetryableTopic(
@@ -111,6 +116,13 @@ class PaymentSagaListener {
             return;
         }
         metrics.count("payflow.saga.transitions", "from", t.from().name(), "to", t.to().name());
+        Instant now = clock.instant();
+        // Time the saga spent waiting in the step that just ended: which participant is slow?
+        metrics.time("payflow.saga.step.duration", Duration.between(t.fromStepStartedAt(), now), "step", t.from().name());
+        if (t.to().isTerminal()) {
+            // Acceptance (HTTP 202) to terminal outcome: the payment-completion SLI, distinct from API latency.
+            metrics.time("payflow.saga.completion", Duration.between(t.sagaStartedAt(), now), "outcome", t.to().name());
+        }
         if (t.to() == SagaStep.COMPENSATING) {
             metrics.count("payflow.saga.compensations");
             log.atWarn().addKeyValue("sagaStepFrom", t.from()).addKeyValue("sagaStep", t.to())

@@ -7,7 +7,7 @@ plugins {
 
 group = 'com.payflow'
 version = '0.1.0-SNAPSHOT'
-description = 'PayFlow WP-01 - backend foundation and domain architecture (modular monolith)'
+description = 'PayFlow - modular monolith payment platform (WP-01 foundation, WP-02 event-driven, WP-03 resilience and scale)'
 
 java {
     toolchain {
@@ -22,6 +22,8 @@ repositories {
 ext {
     springdocVersion = '3.1.1'
     archunitVersion = '1.4.1'
+    resilience4jVersion = '2.4.0'
+    datasourceMicrometerVersion = '2.3.0'
     jsonSchemaValidatorVersion = '3.0.7'
 }
 
@@ -52,6 +54,16 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-kafka'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
 
+    // WP-03 resilience at the synchronous remote boundary (settlement rails) only: core modules, wired explicitly
+    // in the adapter's configuration (no annotations/AOP), metrics bound to Micrometer.
+    // RestClient.Builder (observed: http.client.requests metrics + client spans) for the rail adapter
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
+    implementation "io.github.resilience4j:resilience4j-circuitbreaker:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-retry:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-bulkhead:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-ratelimiter:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-micrometer:${resilience4jVersion}"
+
     // Zero Trust foundation: every request carries a verified JWT
     implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
 
@@ -59,6 +71,10 @@ dependencies {
     // propagation and traceId/spanId in logs. Span export is off until WP-03 provides a collector.
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+    // WP-03: Prometheus scrape endpoint (pull model; Prometheus authenticates with a client-credentials token)
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    // WP-03: JDBC spans in distributed traces (answers "where did the time go" inside a payment)
+    implementation "net.ttddyy.observation:datasource-micrometer-spring-boot:${datasourceMicrometerVersion}"
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
@@ -71,6 +87,8 @@ dependencies {
     testImplementation "com.networknt:json-schema-validator:${jsonSchemaValidatorVersion}"
     testImplementation 'org.awaitility:awaitility'
     testImplementation "com.tngtech.archunit:archunit-junit5:${archunitVersion}"
+    // The settlement rail test double runs in-process in integration tests (real HTTP on a random port).
+    testImplementation project(':rail-simulator')
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     mockitoAgent('org.mockito:mockito-core') { transitive = false }

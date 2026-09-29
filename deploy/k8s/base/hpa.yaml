@@ -1,0 +1,26 @@
+# CPU-based scaling of the stateless request path only. It deliberately does NOT claim to remove the bottlenecks that
+# replicas cannot (WP-03 BOTTLENECK-ANALYSIS): consumer parallelism is capped by partitions (6), each outbox has one
+# active relay (advisory lock), and a hot account serialises on its row lock. maxReplicas x pool size (6 x 20 = 120)
+# is sized against PostgreSQL max_connections; going beyond needs a connection pooler (PgBouncer).
+# Lag/backlog-driven scaling (KEDA) is evaluated in docs/performance/CAPACITY-PLAN.md and not enabled.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payflow
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

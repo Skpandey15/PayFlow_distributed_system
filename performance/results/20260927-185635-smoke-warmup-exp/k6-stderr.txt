@@ -1,0 +1,1 @@
+Error response from daemon: failed to connect to the backend: could not dial Hyper-V socket: connect(b2314a8c-584d-4180-b407-4533dedb0703:016a6eb7-facb-11e6-bd58-64006a7986d3) failed: An operation on a socket could not be performed because the system lacked sufficient buffer space or because a queue was full.

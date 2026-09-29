@@ -1,0 +1,24 @@
+# Non-secret configuration only. Secrets (DB/Mongo credentials) come from the Secret "payflow-secrets", created by
+# the platform's secret manager (External Secrets / Vault / Sealed Secrets). Never committed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payflow-config
+data:
+  PAYFLOW_DB_URL: jdbc:postgresql://postgres.payflow-data.svc:5432/payflow
+  PAYFLOW_DB_USER: payflow_app
+  PAYFLOW_KAFKA_BOOTSTRAP_SERVERS: kafka.payflow-data.svc:9092
+  PAYFLOW_JWT_ISSUER: https://idp.payflow.example/realms/payflow
+  PAYFLOW_SECURITY_JWT_JWK_SET_URI: https://idp.payflow.example/realms/payflow/protocol/openid-connect/certs
+  PAYFLOW_SETTLEMENT_RAIL_URL: https://rails.payflow.example
+  PAYFLOW_TRACE_EXPORT_ENABLED: "true"
+  PAYFLOW_TRACE_SAMPLING: "0.1"
+  PAYFLOW_OTLP_TRACES_ENDPOINT: http://otel-collector.observability.svc:4318/v1/traces
+  # Capacity model (docs/performance/CAPACITY-PLAN.md): maxReplicas x pool size must fit PostgreSQL's budget.
+  PAYFLOW_DB_POOL_SIZE: "20"
+  PAYFLOW_KAFKA_PARTITIONS: "6"
+  # replicas (2) x concurrency (3) = partitions (6): no idle consumers, full parallelism (BOTTLENECK-ANALYSIS §6).
+  PAYFLOW_KAFKA_LISTENER_CONCURRENCY: "3"
+  PAYFLOW_KAFKA_REPLICATION_FACTOR: "3"
+  # JVM: explicit G1 (the ergonomic default below 1792 MiB is SerialGC, measured in WP-03) and container-relative heap.
+  JAVA_TOOL_OPTIONS: "-XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError"

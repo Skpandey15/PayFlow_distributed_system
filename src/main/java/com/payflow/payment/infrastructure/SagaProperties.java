@@ -14,10 +14,14 @@ public record SagaProperties(
         @DefaultValue("30s") Duration captureTimeout,
         @DefaultValue("30s") Duration compensationTimeout,
         @DefaultValue("3") int maxStepAttempts,
-        @DefaultValue("50") int recoveryBatchSize) {
+        @DefaultValue("50") int recoveryBatchSize,
+        @DefaultValue("15s") Duration recoveryHoldAge,
+        // How long the settlement rails deduplicate an idempotency key (provider contract). Manual-review RESUME of an
+        // unknown settlement is refused after this, because a re-submission could then settle twice.
+        @DefaultValue("24h") Duration railIdempotencyWindow) {
 
     SagaPolicy toPolicy() {
         return new SagaPolicy(riskTimeout, fundsTimeout, settlementTimeout, captureTimeout, compensationTimeout,
-                maxStepAttempts, recoveryBatchSize);
+                maxStepAttempts, recoveryBatchSize, recoveryHoldAge);
     }
 }

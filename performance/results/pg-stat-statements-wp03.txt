@@ -1,0 +1,19 @@
+  calls  | total_s | mean_ms | max_ms | hit_pct |                                                            q                                                             
+---------+---------+---------+--------+---------+--------------------------------------------------------------------------------------------------------------------------
+ 1189715 |   250.7 |    0.21 | 5172.6 |    99.2 | insert into account.outbox_event (event_id, aggregate_type, aggregate_id, topic, message_key, event_type, event_version,
+  759887 |    82.2 |    0.11 |  613.9 |   100.0 | insert into ledger.processed_event (consumer, event_id, processed_at) values ($1, $2, $3) on conflict do nothing
+  435039 |    75.8 |    0.17 |  248.7 |   100.0 | update payment.payment_saga set compensation_reason=$1,escalated_from=$2,outcome_reason=$3,step=$4,step_attempts=$5,step
+   51601 |    58.3 |    1.13 | 6868.7 |    99.5 | update payment.outbox_event set published_at = $1, publish_attempts = publish_attempts + $3, last_error = $4 where id = 
+  215156 |    41.3 |    0.19 |  267.9 |    99.8 | update payment.payment set failure_reason=$1,status=$2,updated_at=$3,version=$4 where id=$5 and version=$6
+  216562 |    36.0 |    0.17 |  126.7 |   100.0 | insert into ledger.ledger_entry (journal_entry_id,account_id,amount,currency,direction,line_no,id) values ($1,$2,$3,$4,$
+  107588 |    34.9 |    0.32 |  363.0 |   100.0 | insert into payment.payment_saga (checkout_country,checkout_device_id,checkout_ip_address,checkout_user_agent,compensati
+  325023 |    33.5 |    0.10 |  474.8 |   100.0 | select abje1_0.account_id,abje1_0.available,abje1_0.currency,abje1_0.reserved,abje1_0.updated_at,abje1_0.version from ac
+  108095 |    33.3 |    0.31 | 1278.2 |    98.8 | select irje1_0.client_id,irje1_0.idempotency_key,irje1_0.created_at,irje1_0.expires_at,irje1_0.payment_id,irje1_0.reques
+  107602 |    32.8 |    0.30 | 1293.9 |    99.8 | insert into payment.payment (amount,created_at,currency,failure_reason,initiated_by,method,payee_account_id,payer_accoun
+  107590 |    32.4 |    0.30 | 2268.8 |   100.0 | insert into payment.idempotency_record (created_at,expires_at,payment_id,request_fingerprint,client_id,idempotency_key) 
+  490777 |    28.8 |    0.06 |  839.8 |    99.6 | select pje1_0.id,pje1_0.amount,pje1_0.created_at,pje1_0.currency,pje1_0.failure_reason,pje1_0.initiated_by,pje1_0.method
+  323453 |    27.6 |    0.09 |   81.7 |   100.0 | update account.account_balance set available=$1,reserved=$2,updated_at=$3,version=$4 where account_id=$5 and version=$6
+  433179 |    25.6 |    0.06 |  371.7 |   100.0 | SELECT $2 FROM ONLY "account"."account" x WHERE "id" OPERATOR(pg_catalog.=) $1 FOR KEY SHARE OF x
+  431451 |    25.4 |    0.06 |  509.3 |   100.0 | select aje1_0.id,aje1_0.created_at,aje1_0.currency,aje1_0.display_name,aje1_0.owner_subject,aje1_0.status,aje1_0.updated
+(15 rows)
+

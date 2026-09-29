@@ -1,0 +1,355 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: payflow
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/enforce: restricted
+  name: payflow
+---
+apiVersion: v1
+automountServiceAccountToken: false
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/part-of: payflow
+  name: payflow
+  namespace: payflow
+---
+apiVersion: v1
+data:
+  JAVA_TOOL_OPTIONS: -XX:+UseG1GC -XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError
+  PAYFLOW_DB_POOL_SIZE: "20"
+  PAYFLOW_DB_URL: jdbc:postgresql://host.k3d.internal:5432/payflow
+  PAYFLOW_DB_USER: payflow_app
+  PAYFLOW_JWT_ISSUER: http://localhost:8081/realms/payflow
+  PAYFLOW_KAFKA_BOOTSTRAP_SERVERS: host.k3d.internal:9092
+  PAYFLOW_KAFKA_LISTENER_CONCURRENCY: "3"
+  PAYFLOW_KAFKA_PARTITIONS: "6"
+  PAYFLOW_KAFKA_REPLICATION_FACTOR: "1"
+  PAYFLOW_OTLP_TRACES_ENDPOINT: http://host.k3d.internal:4318/v1/traces
+  PAYFLOW_SECURITY_JWT_JWK_SET_URI: http://host.k3d.internal:8081/realms/payflow/protocol/openid-connect/certs
+  PAYFLOW_SETTLEMENT_RAIL_URL: http://rail-simulator:8090
+  PAYFLOW_TRACE_EXPORT_ENABLED: "true"
+  PAYFLOW_TRACE_SAMPLING: "0.1"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/part-of: payflow
+  name: payflow-config
+  namespace: payflow
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: payflow
+    app.kubernetes.io/part-of: payflow
+  name: payflow
+  namespace: payflow
+spec:
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: payflow
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rail-simulator
+  namespace: payflow
+spec:
+  ports:
+  - name: http
+    port: 8090
+    targetPort: http
+  selector:
+    app.kubernetes.io/name: rail-simulator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: payflow
+    app.kubernetes.io/part-of: payflow
+  name: payflow
+  namespace: payflow
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payflow
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payflow
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: payflow
+              topologyKey: kubernetes.io/hostname
+            weight: 100
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: PAYFLOW_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: db-password
+              name: payflow-secrets
+        - name: PAYFLOW_MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              key: mongo-uri
+              name: payflow-secrets
+        envFrom:
+        - configMapRef:
+            name: payflow-config
+        image: payflow:wp03
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            sleep:
+              seconds: 10
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+        name: payflow
+        ports:
+        - containerPort: 8080
+          name: http
+        readinessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /actuator/health/readiness
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          limits:
+            memory: 1536Mi
+          requests:
+            cpu: "2"
+            memory: 1536Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        startupProbe:
+          failureThreshold: 36
+          httpGet:
+            path: /actuator/health/liveness
+            port: http
+          periodSeconds: 5
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: payflow
+      terminationGracePeriodSeconds: 45
+      topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: payflow
+        maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+      volumes:
+      - emptyDir:
+          medium: Memory
+          sizeLimit: 64Mi
+        name: tmp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rail-simulator
+  namespace: payflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rail-simulator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: rail-simulator
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - image: payflow-rail-simulator:wp03
+        imagePullPolicy: IfNotPresent
+        name: rail-simulator
+        ports:
+        - containerPort: 8090
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 192Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10002
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+    app.kubernetes.io/part-of: payflow
+  name: payflow
+  namespace: payflow
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payflow
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    app.kubernetes.io/part-of: payflow
+  name: payflow
+  namespace: payflow
+spec:
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  maxReplicas: 6
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 60
+        type: Utilization
+    type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payflow
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: payflow
+  name: default-deny
+  namespace: payflow
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/part-of: payflow
+  name: payflow
+  namespace: payflow
+spec:
+  egress:
+  - ports:
+    - port: 5432
+    - port: 9092
+    - port: 27017
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: payflow-data
+  - ports:
+    - port: 4318
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+  - ports:
+    - port: 443
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress
+    ports:
+    - port: 8080
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+    ports:
+    - port: 8080
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: payflow
+  policyTypes:
+  - Ingress
+  - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rail-simulator
+  namespace: payflow
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: payflow
+    ports:
+    - port: 8090
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rail-simulator
+  policyTypes:
+  - Ingress

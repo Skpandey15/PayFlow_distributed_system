@@ -1,0 +1,89 @@
+# Load-test report: 20260927-172451-smoke-warmup-final
+
+Window: 2026-09-27T11:54:56.792000+00:00 to 2026-09-27T11:56:26.794000+00:00 (+31s drain). Rate scale 1.
+
+## Client (k6, open model)
+
+| Metric | Value |
+|---|---|
+| iterations | 450 |
+| iterations_per_s | 4.786762056204005 |
+| dropped_iterations | 0 |
+| payments_accepted | 450 |
+| payments_throttled | 0 |
+| payments_rejected_at_api | 0 |
+| checks_pass_rate | 1 |
+| post_p50_ms | 16.4361095 |
+| post_p95_ms | 37.6384556 |
+| post_p99_ms | 71.93392345999989 |
+| post_max_ms | 94.728218 |
+
+## Server (Prometheus)
+
+| Metric | Value |
+|---|---|
+| accepted_per_s | 5.0 |
+| api_5xx_ratio | None |
+| api_post_p50_ms | 14.7 |
+| api_post_p95_ms | 34.7 |
+| api_post_p99_ms | 60.9 |
+| api_get_p99_ms | 27.6 |
+| saga_completed | 461.4333 |
+| saga_completion_by_outcome | {"outcome=COMPLETED": 461.4333} |
+| saga_p50_ms | 1618.1 |
+| saga_p95_ms | 1787.5 |
+| saga_p99_ms | 2067.0 |
+| saga_step_p99_ms | {"step=AWAITING_CAPTURE": 581.6, "step=AWAITING_FUNDS": 570.4, "step=AWAITING_RISK": 345.9, "step=AWAITING_SETTLEMENT": 626.0} |
+| drain_seconds_after_load | 31 |
+| saga_open_at_load_end | {"step=AWAITING_CAPTURE": 2.0, "step=AWAITING_FUNDS": 2.0, "step=AWAITING_RISK": 1.0, "step=AWAITING_SETTLEMENT": 3.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_after_drain | {"step=AWAITING_CAPTURE": 0.0, "step=AWAITING_FUNDS": 0.0, "step=AWAITING_RISK": 0.0, "step=AWAITING_SETTLEMENT": 0.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_max | {"step=AWAITING_CAPTURE": 3.0, "step=AWAITING_FUNDS": 2.0, "step=AWAITING_RISK": 2.0, "step=AWAITING_SETTLEMENT": 4.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| outbox_publish_delay_p50_ms | 228.3 |
+| outbox_publish_delay_p99_ms | 334.5 |
+| outbox_publish_delay_p99_by_outbox_ms | {"outbox=account.outbox_event": 249.4, "outbox=payment.outbox_event": 338.4, "outbox=settlement.outbox_event": 340.4} |
+| outbox_send_p99_ms | 19.8 |
+| outbox_published_per_s | 54.6062 |
+| outbox_backlog_max | {"outbox=account.outbox_event": 0.0, "outbox=payment.outbox_event": 7.0, "outbox=settlement.outbox_event": 2.0} |
+| outbox_oldest_age_max_s | {"outbox=account.outbox_event": 0.0, "outbox=payment.outbox_event": 0.0, "outbox=settlement.outbox_event": 0.0} |
+| consumer_lag_max_top5 | {"group=account-service,topic=funds.commands": 0.0, "group=fraud-service,topic=fraud.commands": 0.0, "group=ledger-service,topic=funds.events": 0.0, "group=payment-service,topic=fraud.events": 0.0, "group=payment-service,topic=funds.events": 0.0} |
+| consumer_p99_ms | {"consumer=ledger-service": 24.6, "consumer=payment-service": 32.5, "consumer=account-service": 39.2, "consumer=fraud-service": 38.8, "consumer=settlement-service": 70.5} |
+| events_consumed_per_s | 49.6396 |
+| events_failed | {} |
+| events_dead_lettered | 0 |
+| hikari_active_max | 4.0 |
+| hikari_pending_max | 0.0 |
+| hikari_acquire_max_ms | 6.2 |
+| hikari_acquire_avg_ms | 0.0 |
+| hikari_usage_avg_ms | 7.4 |
+| hikari_timeouts | 0 |
+| pg_commits_per_s | 152.6588 |
+| pg_rollbacks | 0.0 |
+| pg_deadlocks | 0 |
+| pg_backends_max | 22.0 |
+| mongo_cmd_max_ms | 41.4 |
+| mongo_cmd_avg_ms | 1.6 |
+| jvm_heap_used_max_mb | 194 |
+| jvm_heap_after_gc_max_mb | 73 |
+| jvm_heap_committed_max_mb | 212 |
+| gc_pause_max_ms | 48.0 |
+| gc_pause_total_ms | 287.2 |
+| gc_count | 21.041 |
+| alloc_rate_mb_s | 25.5 |
+| threads_max | 70.0 |
+| process_cpu_avg | 0.3555 |
+| process_cpu_max | 0.607 |
+
+## Containers (docker stats; CPU % of one core)
+
+| Container | CPU avg % | CPU max % | Mem max MiB |
+|---|---|---|---|
+| payflow-grafana-1 | 1.1 | 1.15 | 362 |
+| payflow-kafka-1 | 41.9 | 41.91 | 450 |
+| payflow-keycloak-1 | 0.3 | 0.27 | 732 |
+| payflow-mongo-1 | 41.2 | 41.22 | 204 |
+| payflow-payflow-1 | 102.9 | 102.86 | 563 |
+| payflow-postgres-1 | 11.6 | 11.6 | 94 |
+| payflow-postgres-exporter-1 | 0.0 | 0.0 | 8 |
+| payflow-prometheus-1 | 0.2 | 0.25 | 86 |
+| payflow-settlement-rail-1 | 1.7 | 1.73 | 26 |
+| payflow-tempo-1 | 0.3 | 0.35 | 70 |

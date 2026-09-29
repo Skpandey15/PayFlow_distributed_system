@@ -1,0 +1,5 @@
+sum by (action,step) (increase(payflow_saga_recovery_total[70m])) => [({'action': 'COMMAND_REISSUED', 'step': 'AWAITING_CAPTURE'}, 730.7), ({'action': 'COMMAND_REISSUED', 'step': 'AWAITING_FUNDS'}, 409.9), ({'action': 'COMMAND_REISSUED', 'step': 'AWAITING_RISK'}, 84.0), ({'action': 'COMMAND_REISSUED', 'step': 'AWAITING_SETTLEMENT'}, 50.6)]
+sum by (outcome) (increase(payflow_saga_completion_seconds_count[70m])) => [({'outcome': 'COMPLETED'}, 5433.5)]
+max by (step) (payflow_saga_open) => [({'step': 'AWAITING_CAPTURE'}, 0.0), ({'step': 'AWAITING_FUNDS'}, 0.0), ({'step': 'AWAITING_RISK'}, 0.0), ({'step': 'AWAITING_SETTLEMENT'}, 0.0), ({'step': 'COMPENSATING'}, 0.0), ({'step': 'MANUAL_REVIEW'}, 0.0)]
+max(max_over_time(payflow_outbox_backlog{outbox="payment.outbox_event"}[70m])) => [({}, 9329.0)]
+max(max_over_time(payflow_outbox_oldest_age_seconds{outbox="payment.outbox_event"}[70m])) => [({}, 33782.0)]

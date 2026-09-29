@@ -1,0 +1,45 @@
+# Local k3d lab: one replica, the platform services from docker-compose reached through the host, and the rail
+# simulator in-cluster. Create the Secret from your .env first (never committed):
+#   kubectl -n payflow create secret generic payflow-secrets \
+#     --from-literal=db-password="$PAYFLOW_DB_PASSWORD" \
+#     --from-literal=mongo-uri="mongodb://payflow_fraud_app:$PAYFLOW_MONGO_PASSWORD@host.k3d.internal:27017/payflow_fraud?authSource=payflow_fraud"
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: payflow
+resources:
+  - ../../base
+  - rail-simulator.yaml
+patches:
+  - target: {kind: Deployment, name: payflow}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target: {kind: HorizontalPodAutoscaler, name: payflow}
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+  - target: {kind: ConfigMap, name: payflow-config}
+    patch: |-
+      - op: replace
+        path: /data/PAYFLOW_DB_URL
+        value: jdbc:postgresql://host.k3d.internal:5432/payflow
+      - op: replace
+        path: /data/PAYFLOW_KAFKA_BOOTSTRAP_SERVERS
+        value: host.k3d.internal:9092
+      - op: replace
+        path: /data/PAYFLOW_JWT_ISSUER
+        value: http://localhost:8081/realms/payflow
+      - op: replace
+        path: /data/PAYFLOW_SECURITY_JWT_JWK_SET_URI
+        value: http://host.k3d.internal:8081/realms/payflow/protocol/openid-connect/certs
+      - op: replace
+        path: /data/PAYFLOW_SETTLEMENT_RAIL_URL
+        value: http://rail-simulator:8090
+      - op: replace
+        path: /data/PAYFLOW_KAFKA_REPLICATION_FACTOR
+        value: "1"
+      - op: replace
+        path: /data/PAYFLOW_OTLP_TRACES_ENDPOINT
+        value: http://host.k3d.internal:4318/v1/traces

@@ -16,6 +16,16 @@ payflow:
       initial-delay-ms: 200
       multiplier: 2
       max-delay-ms: 1000
+  settlement:
+    rail:
+      # The shared test context deliberately injects rail failures (SIM-UNAVAILABLE); a production-sized breaker
+      # window would let one test open the circuit for the next. ResilienceIT runs its own context with small values.
+      circuit-breaker:
+        sliding-window-size: 200
+        minimum-calls: 100
+  traffic:
+    # Concurrency tests fire bursts from one subject on purpose; TrafficControlIT checks the real limits.
+    payments-per-subject-per-second: 10000
   saga:
     # Tests drive recovery explicitly (backdating step_started_at), never on a timer.
     recovery-interval-ms: 3600000

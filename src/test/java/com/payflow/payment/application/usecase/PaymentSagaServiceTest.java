@@ -121,4 +121,25 @@ class PaymentSagaServiceTest {
         verify(commands).releaseFunds(any(), any(), eq("TIMEOUT"));
         verify(events, org.mockito.Mockito.atLeastOnce()).publish(anyList());
     }
+
+    /** WP-03: an unpublished command is not an unanswered command. Recovery holds instead of amplifying a backlog. */
+    @Test
+    void recoveryHoldsWhileCommandsAreNotBeingPublished() {
+        SagaPolicy policy = new SagaPolicy(Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofMinutes(2),
+                Duration.ofSeconds(30), Duration.ofSeconds(30), 1, 10, Duration.ofSeconds(15));
+        orchestrator.onRiskAssessed(id, true, null); // AWAITING_FUNDS, and would be overdue at +60 s
+        Clock later = Clock.fixed(NOW.plusSeconds(60), ZoneOffset.UTC);
+
+        SagaRecoveryService backlogged = new SagaRecoveryService(payments, sagas, commands, events, tx, later, policy,
+                () -> Duration.ofSeconds(40));
+        var report = backlogged.recoverOverdueSagas();
+        assertThat(report.heldBecauseCommandsUnpublished()).isTrue();
+        assertThat(report.actions()).isEmpty();
+        verify(commands, times(1)).reserveFunds(any(), any()); // only the original command, no re-issue
+
+        SagaRecoveryService caughtUp = new SagaRecoveryService(payments, sagas, commands, events, tx, later, policy,
+                () -> Duration.ofSeconds(2));
+        assertThat(caughtUp.recoverOverdueSagas().actions()).singleElement()
+                .extracting("action").isEqualTo(RecoveryAction.COMMAND_REISSUED);
+    }
 }

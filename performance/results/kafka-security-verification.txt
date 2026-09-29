@@ -1,0 +1,9 @@
+PASS  unauthenticated (PLAINTEXT) client learns no topic names
+PASS  wrong SCRAM password is rejected
+PASS  authenticated principal without grants cannot write payment.events (deny by default)
+PASS  ledger-service cannot read fraud.commands (personal data it has no need for)
+PASS  fraud-service cannot forge funds.events (single writer per topic)
+PASS  ledger-service CAN read funds.events (its granted stream)
+PASS  payflow-app cannot create topics outside its namespaces
+PASS  payflow-app sees its own topics
+---- 8 passed, 0 failed

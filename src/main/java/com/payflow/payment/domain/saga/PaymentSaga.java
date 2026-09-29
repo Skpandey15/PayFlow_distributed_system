@@ -31,6 +31,7 @@ public final class PaymentSaga {
     private int stepAttempts;
     private Instant stepStartedAt;
     private Instant updatedAt;
+    private SagaStep escalatedFrom;
 
     private PaymentSaga(PaymentSagaSnapshot s) {
         this.sagaId = Objects.requireNonNull(s.sagaId(), "sagaId");
@@ -45,6 +46,7 @@ public final class PaymentSaga {
         this.version = s.version();
         this.createdAt = s.createdAt();
         this.updatedAt = s.updatedAt();
+        this.escalatedFrom = s.escalatedFrom();
     }
 
     public static PaymentSaga start(PaymentId paymentId, String correlationId, CheckoutContext checkout, Instant now) {
@@ -58,7 +60,7 @@ public final class PaymentSaga {
 
     public PaymentSagaSnapshot snapshot() {
         return new PaymentSagaSnapshot(sagaId, paymentId, step, compensationReason, outcomeReason, stepAttempts,
-                stepStartedAt, correlationId, checkout, version, createdAt, updatedAt);
+                stepStartedAt, correlationId, checkout, version, createdAt, updatedAt, escalatedFrom);
     }
 
     // ------------------------------------------------------------------------------------------------ replies
@@ -174,11 +176,37 @@ public final class PaymentSaga {
             }
             case AWAITING_SETTLEMENT, AWAITING_CAPTURE, COMPENSATING -> {
                 outcomeReason = "TIMEOUT_IN_" + step;
+                escalatedFrom = step;
                 moveTo(SagaStep.MANUAL_REVIEW, now);
                 yield TimeoutDecision.ESCALATE_TO_MANUAL_REVIEW;
             }
             default -> throw new InvalidStateTransitionException("SAGA_NOT_IN_FLIGHT", "Saga " + sagaId + " is " + step);
         };
+    }
+
+    // ------------------------------------------------------------------------------------------------ manual review
+
+    /**
+     * An operator resolves a manual review by resuming the step that timed out. There is deliberately no transition
+     * to COMPLETED or FAILED here: the outcome is always re-established by the participants (idempotent by payment)
+     * through the normal event flow, so an operator cannot "force" a financial result.
+     *
+     * @return the resumed step, whose command must be re-issued
+     */
+    public SagaStep resumeFromManualReview(Instant now) {
+        if (step != SagaStep.MANUAL_REVIEW || escalatedFrom == null) {
+            throw new InvalidStateTransitionException("SAGA_NOT_IN_MANUAL_REVIEW",
+                    "Payment " + paymentId + " is not awaiting manual review (saga step " + step + ")");
+        }
+        SagaStep resumed = escalatedFrom;
+        escalatedFrom = null;
+        outcomeReason = null;
+        moveTo(resumed, now);
+        return resumed;
+    }
+
+    public SagaStep escalatedFrom() {
+        return escalatedFrom;
     }
 
     // ------------------------------------------------------------------------------------------------ internals
@@ -251,5 +279,9 @@ public final class PaymentSaga {
 
     public long version() {
         return version;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
     }
 }

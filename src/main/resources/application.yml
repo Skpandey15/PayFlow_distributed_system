@@ -65,7 +65,8 @@ spring:
     listener:
       # Commit each record's offset after it was processed successfully (or routed to retry/DLT).
       ack-mode: record
-      concurrency: 3
+      # Per listener container. Rule: replicas x concurrency <= partitions (6); extra consumers idle (WP-03 F-15).
+      concurrency: ${PAYFLOW_KAFKA_LISTENER_CONCURRENCY:3}
       # Continues the W3C trace from the traceparent header that the outbox stored.
       observation-enabled: true
       missing-topics-fatal: false
@@ -76,6 +77,15 @@ spring:
     scheduling:
       pool:
         size: 4
+      # Graceful shutdown: let an in-progress relay batch or recovery run finish (it is bounded by the relay's send
+      # timeout), instead of interrupting it mid-batch. Rows not yet marked are simply re-sent by the next owner.
+      shutdown:
+        await-termination: true
+        await-termination-period: 15s
+  lifecycle:
+    # Per shutdown phase (web server drain, then listeners and schedulers). Sum stays inside the Kubernetes
+    # terminationGracePeriodSeconds (45s) after the preStop delay (10s).
+    timeout-per-shutdown-phase: 25s
 
 server:
   shutdown: graceful
@@ -87,8 +97,9 @@ management:
   endpoints:
     web:
       exposure:
-        # metrics requires scope ops:metrics; Prometheus scraping is WP-03.
-        include: health,info,metrics
+        # metrics and prometheus require scope ops:metrics. Prometheus scrapes with a client-credentials token
+        # (payflow-monitoring client), so the scrape path is authenticated like every other caller.
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: never
@@ -105,10 +116,59 @@ management:
           include: livenessState
   tracing:
     sampling:
+      # Head sampling. Trace context (traceId in logs, traceparent on events) is propagated for EVERY request
+      # regardless; sampling only decides which spans are exported. Load tests run at 0.1.
       probability: ${PAYFLOW_TRACE_SAMPLING:1.0}
     export:
-      # W3C trace context is propagated and logged now. Export to a collector is WP-03.
       enabled: ${PAYFLOW_TRACE_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          # OTLP/HTTP to Tempo (docker-compose observability profile) or an OpenTelemetry Collector.
+          endpoint: ${PAYFLOW_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+          timeout: 5s
+  otlp:
+    metrics:
+      export:
+        # One metrics pipeline: Prometheus pulls /actuator/prometheus. The OpenTelemetry starter would otherwise also
+        # push OTLP metrics every minute to a collector that does not exist (found in WP-03: failing background export).
+        enabled: false
+  metrics:
+    tags:
+      application: payflow
+    distribution:
+      # Percentile histograms (Prometheus buckets) only for the latency SLIs, so p50/p95/p99 are computed in PromQL
+      # across replicas. Client-side percentiles cannot be aggregated and are not used.
+      percentiles-histogram:
+        http.server.requests: true
+        payflow.saga: true
+        payflow.outbox.publish.delay: true
+        payflow.outbox.send.latency: true
+        payflow.events.processing: true
+      # Exact SLO thresholds as bucket boundaries, so "share of requests under the target" is exact (SLI-SLO.md).
+      slo:
+        http.server.requests: 100ms,300ms,1s
+        payflow.saga.completion: 5s,10s,30s,60s
+        payflow.outbox.publish.delay: 1s,5s,15s
+      minimum-expected-value:
+        http.server.requests: 1ms
+        payflow: 1ms
+      maximum-expected-value:
+        http.server.requests: 10s
+        payflow.saga: 10m
+        payflow.outbox.publish.delay: 10m
+        payflow.outbox.send.latency: 30s
+        payflow.events.processing: 30s
+
+# JDBC spans (datasource-micrometer). Connection spans expose pool-acquisition waits inside a trace; query spans show
+# statement time. Parameter values are never recorded: they carry amounts and account ids.
+jdbc:
+  includes: CONNECTION, QUERY
+  datasource-proxy:
+    include-parameter-values: false
+    query:
+      enable-logging: false
 
 logging:
   level:
@@ -124,6 +184,16 @@ payflow:
       audience: ${PAYFLOW_JWT_AUDIENCE:payflow-api}
       # payflow.security.jwt.jwk-set-uri is intentionally not defaulted: without it no JwtDecoder exists and
       # the application refuses to start (fail closed). Set PAYFLOW_SECURITY_JWT_JWK_SET_URI.
+  traffic:
+    # Edge overload control (RESILIENCE-ARCHITECTURE.md). Experiments override via environment, never silently.
+    payments-per-subject-per-second: ${PAYFLOW_RATE_LIMIT_PAYMENTS_PER_SUBJECT:20}
+    ops-per-subject-per-minute: 10
+    admission-max-outbox-age: ${PAYFLOW_ADMISSION_MAX_OUTBOX_AGE:60s}
+    admission-retry-after: 30s
+    # In-flight bulkhead on payment acceptance (0 = off). Value from the WP-03 stress experiment (TUNING-RESULTS.md).
+    max-concurrent-payment-requests: ${PAYFLOW_MAX_CONCURRENT_PAYMENT_REQUESTS:48}
+    # Shed intake while any group is this far behind on a main topic (~15-20 s of work at measured drain rates).
+    admission-max-consumer-lag: ${PAYFLOW_ADMISSION_MAX_CONSUMER_LAG:5000}
   persistence:
     transaction-timeout: 5s
   messaging:
@@ -137,7 +207,18 @@ payflow:
       batch-size: 100
       send-timeout: 5s
       relay-transaction-timeout: 30s
-      retention: 7d
+      # Published rows are diagnostics only (the event is on Kafka for 7 d). 7 d here grew the payment outbox to
+      # 3.6 M rows / 3.8 GB in the lab and slowed the database (TUNING-RESULTS §3). Production: partition by hour
+      # and drop partitions instead of DELETE (CAPACITY-PLAN).
+      retention: ${PAYFLOW_OUTBOX_RETENTION:1h}
+      purge-interval-ms: 300000
+      # WP-03 (ADR-019). WP-02 behaviour for A/B measurement: pipelined=false, drain-budget=0s.
+      pipelined: ${PAYFLOW_OUTBOX_PIPELINED:true}
+      drain-budget: ${PAYFLOW_OUTBOX_DRAIN_BUDGET:1s}
+    inbox:
+      # Deduplication window: must exceed Kafka topic retention (7 d) + DLT replay window (InboxPurgeJob).
+      retention: 8d
+      purge-interval-ms: 3600000
     retry:
       # 1 original + 3 retries at 1s, 3s, 9s (non-blocking retry topics), then the dead-letter topic.
       attempts: 4
@@ -152,6 +233,33 @@ payflow:
     compensation-timeout: 30s
     max-step-attempts: 3
     recovery-interval-ms: 10000
+  settlement:
+    rail:
+      # External settlement rails (the lab rail simulator). Policy values are derived in RESILIENCE-ARCHITECTURE.md.
+      base-url: ${PAYFLOW_SETTLEMENT_RAIL_URL:http://localhost:8090}
+      connect-timeout: 500ms
+      submit-timeout: 2s
+      inquiry-timeout: 1s
+      retry:
+        max-attempts: 2
+        initial-backoff: 200ms
+        multiplier: 2.0
+        jitter: 0.5
+      circuit-breaker:
+        sliding-window-size: 20
+        minimum-calls: 10
+        failure-rate-percent: 50
+        slow-call-threshold: 1500ms
+        slow-call-rate-percent: 80
+        open-duration: 15s
+        half-open-calls: 3
+      bulkhead:
+        max-concurrent-calls: 16
+        inquiry-max-concurrent-calls: 2
+  reconciliation:
+    # Continuous reconciliation (K4). Grace: records younger than this are in flight, not drift.
+    interval-ms: ${PAYFLOW_RECONCILIATION_INTERVAL_MS:300000}
+    grace: 2m
   payment:
     idempotency-retention: 24h
     idempotency-purge-interval: 1h
@@ -171,6 +279,20 @@ payflow:
     missing-device-score: 15
     high-risk-countries: KP,IR
     high-risk-country-score: 70
+
+---
+# Kafka SASL/SCRAM (WP-03, ADR-023): the application authenticates as its own principal and is limited by broker ACLs.
+# Credentials come from the environment (Secret), never from this file.
+spring:
+  config:
+    activate:
+      on-profile: kafka-sasl
+  kafka:
+    security:
+      protocol: SASL_PLAINTEXT
+    properties:
+      sasl.mechanism: SCRAM-SHA-512
+      sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="${PAYFLOW_KAFKA_USERNAME}" password="${PAYFLOW_KAFKA_PASSWORD}";
 
 ---
 # Structured (ECS JSON) logs everywhere except local development and tests.

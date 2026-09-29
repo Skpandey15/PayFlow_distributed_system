@@ -10,7 +10,15 @@ import java.util.stream.Stream;
  * rails are the slowest participant, and an early timeout there only causes needless re-submissions.
  */
 public record SagaPolicy(Duration riskTimeout, Duration fundsTimeout, Duration settlementTimeout,
-                         Duration captureTimeout, Duration compensationTimeout, int maxStepAttempts, int recoveryBatchSize) {
+                         Duration captureTimeout, Duration compensationTimeout, int maxStepAttempts, int recoveryBatchSize,
+                         Duration recoveryHoldAge) {
+
+    /** Without backpressure-aware holding (unit tests of the timeout rules themselves). */
+    public SagaPolicy(Duration riskTimeout, Duration fundsTimeout, Duration settlementTimeout, Duration captureTimeout,
+                      Duration compensationTimeout, int maxStepAttempts, int recoveryBatchSize) {
+        this(riskTimeout, fundsTimeout, settlementTimeout, captureTimeout, compensationTimeout, maxStepAttempts,
+                recoveryBatchSize, Duration.ofDays(36500));
+    }
 
     public Duration timeoutFor(SagaStep step) {
         return switch (step) {

@@ -1,0 +1,79 @@
+# Load-test report: 20260927-192934-smoke-warmup-exp
+
+Window: 2026-09-27T14:00:39.674000+00:00 to 2026-09-27T14:02:09.677000+00:00 (+31s drain). Rate scale 1.
+
+## Client (k6, open model)
+
+| Metric | Value |
+|---|---|
+| iterations | 450 |
+| iterations_per_s | 4.816777094804235 |
+| dropped_iterations | 0 |
+| payments_accepted | 450 |
+| payments_throttled | 0 |
+| payments_rejected_at_api | 0 |
+| checks_pass_rate | 1 |
+| post_p50_ms | 17.3034535 |
+| post_p95_ms | 49.480877 |
+| post_p99_ms | 78.3097296199999 |
+| post_max_ms | 218.848741 |
+
+## Server (Prometheus)
+
+| Metric | Value |
+|---|---|
+| accepted_per_s | 5.0037 |
+| api_5xx_ratio | None |
+| api_post_p50_ms | 16.2 |
+| api_post_p95_ms | 44.7 |
+| api_post_p99_ms | 77.6 |
+| api_get_p99_ms | 13.9 |
+| saga_completed | 452.4698 |
+| saga_completion_by_outcome | {"outcome=COMPLETED": 452.4698} |
+| saga_p50_ms | 1576.9 |
+| saga_p95_ms | 1768.3 |
+| saga_p99_ms | 1785.3 |
+| saga_step_p99_ms | {"step=AWAITING_RISK": 338.6, "step=AWAITING_SETTLEMENT": 599.4, "step=AWAITING_CAPTURE": 535.2, "step=AWAITING_FUNDS": 534.8} |
+| drain_seconds_after_load | 31 |
+| saga_open_at_load_end | {"step=AWAITING_CAPTURE": 2.0, "step=AWAITING_FUNDS": 2.0, "step=AWAITING_RISK": 2.0, "step=AWAITING_SETTLEMENT": 3.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_after_drain | {"step=AWAITING_CAPTURE": 0.0, "step=AWAITING_FUNDS": 0.0, "step=AWAITING_RISK": 0.0, "step=AWAITING_SETTLEMENT": 0.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_max | {"step=AWAITING_CAPTURE": 3.0, "step=AWAITING_FUNDS": 3.0, "step=AWAITING_RISK": 2.0, "step=AWAITING_SETTLEMENT": 4.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| outbox_publish_delay_p50_ms | 210.3 |
+| outbox_publish_delay_p99_ms | 259.3 |
+| outbox_publish_delay_p99_by_outbox_ms | {"outbox=payment.outbox_event": 261.5, "outbox=settlement.outbox_event": 248.3, "outbox=account.outbox_event": 223.6} |
+| outbox_send_p99_ms | 23.8 |
+| outbox_published_per_s | 54.7578 |
+| outbox_backlog_max | {"outbox=account.outbox_event": 0.0, "outbox=payment.outbox_event": 5.0, "outbox=settlement.outbox_event": 0.0} |
+| outbox_oldest_age_max_s | {"outbox=account.outbox_event": 0.0, "outbox=payment.outbox_event": 0.0, "outbox=settlement.outbox_event": 0.0} |
+| consumer_lag_max_top5 | {"group=payment-service,topic=settlement.events": 2.0, "group=fraud-service,topic=fraud.commands": 1.0, "group=payment-service,topic=fraud.events": 1.0, "group=ledger-service,topic=funds.events": 1.0, "group=payment-service,topic=funds.events": 1.0} |
+| consumer_p99_ms | {"consumer=ledger-service": 35.8, "consumer=payment-service": 47.4, "consumer=account-service": 65.2, "consumer=fraud-service": 51.4, "consumer=settlement-service": 82.5} |
+| events_consumed_per_s | 49.7029 |
+| events_failed | {} |
+| events_dead_lettered | 0 |
+| hikari_active_max | 4.0 |
+| hikari_pending_max | 0.0 |
+| hikari_acquire_max_ms | 24.5 |
+| hikari_acquire_avg_ms | 0.1 |
+| hikari_usage_avg_ms | 9.0 |
+| hikari_timeouts | 0 |
+| pg_commits_per_s | 178.0235 |
+| pg_rollbacks | 0.0 |
+| pg_deadlocks | 0 |
+| pg_backends_max | 42.0 |
+| mongo_cmd_max_ms | 21.8 |
+| mongo_cmd_avg_ms | 2.5 |
+| jvm_heap_used_max_mb | 374 |
+| jvm_heap_after_gc_max_mb | 140 |
+| jvm_heap_committed_max_mb | 452 |
+| gc_pause_max_ms | 32.0 |
+| gc_pause_total_ms | 430.5 |
+| gc_count | 26.7842 |
+| alloc_rate_mb_s | 33.9 |
+| threads_max | 70.0 |
+| process_cpu_avg | 0.2711 |
+| process_cpu_max | 0.579 |
+
+## Containers (docker stats; CPU % of one core)
+
+| Container | CPU avg % | CPU max % | Mem max MiB |
+|---|---|---|---|

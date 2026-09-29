@@ -2,6 +2,7 @@ package com.payflow.payment.infrastructure;
 
 import com.payflow.payment.application.port.in.RecoverStuckSagasUseCase;
 import com.payflow.payment.application.port.in.RecoverStuckSagasUseCase.RecoveredSaga;
+import com.payflow.payment.application.port.in.RecoverStuckSagasUseCase.RecoveryReport;
 import com.payflow.payment.application.port.in.RecoverStuckSagasUseCase.RecoveryAction;
 import com.payflow.platform.messaging.MessageContext;
 import com.payflow.platform.messaging.MessagingMetrics;
@@ -22,6 +23,7 @@ class SagaRecoveryJob {
 
     private final RecoverStuckSagasUseCase recovery;
     private final MessagingMetrics metrics;
+    private volatile boolean held;
 
     SagaRecoveryJob(RecoverStuckSagasUseCase recovery, MessagingMetrics metrics) {
         this.recovery = recovery;
@@ -32,7 +34,18 @@ class SagaRecoveryJob {
             initialDelayString = "${payflow.saga.recovery-interval-ms:10000}")
     void recover() {
         try {
-            for (RecoveredSaga r : recovery.recoverOverdueSagas().actions()) {
+            RecoveryReport report = recovery.recoverOverdueSagas();
+            if (report.heldBecauseCommandsUnpublished() != held) {
+                // Log the transition only (not every 10 s): holding is a symptom of the outbox-age alert, not a new one.
+                held = report.heldBecauseCommandsUnpublished();
+                (held ? log.atWarn() : log.atInfo()).log(held
+                        ? "saga recovery held: outgoing commands are not being published (outbox backlog)"
+                        : "saga recovery resumed: command publication caught up");
+            }
+            if (held) {
+                metrics.count("payflow.saga.recovery.held");
+            }
+            for (RecoveredSaga r : report.actions()) {
                 report(r);
             }
         } catch (RuntimeException e) {

@@ -1,0 +1,226 @@
+# WP-03 baseline stack = WP-02 application image (payflow:wp02-baseline, WP-02 code + WP-03 instrumentation only)
+# with the WP-03 observability stack. Pinned so every baseline run starts from the identical system.
+# Run from performance/baseline with: docker compose -p payflow -f docker-compose.wp02-baseline.yml ...
+# Local runtime: PayFlow + PostgreSQL + MongoDB + Kafka (KRaft) + Keycloak (OIDC identity provider)
+# + observability (Prometheus, Grafana, Tempo, postgres-exporter).
+#   cp .env.example .env   # then set every password
+#   docker compose up --build
+# Secrets come only from .env (git-ignored). Nothing secret is committed.
+name: payflow
+
+services:
+  postgres:
+    image: postgres:18.1-alpine
+    environment:
+      POSTGRES_DB: payflow
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      # Consumed by deploy/postgres/init to create the least-privilege roles.
+      PAYFLOW_DB_MIGRATION_PASSWORD: ${PAYFLOW_DB_MIGRATION_PASSWORD:?set PAYFLOW_DB_MIGRATION_PASSWORD in .env}
+      PAYFLOW_DB_PASSWORD: ${PAYFLOW_DB_PASSWORD:?set PAYFLOW_DB_PASSWORD in .env}
+      PAYFLOW_DB_MONITOR_PASSWORD: ${PAYFLOW_DB_MONITOR_PASSWORD:?set PAYFLOW_DB_MONITOR_PASSWORD in .env}
+    # pg_stat_statements: per-statement latency; log_lock_waits: evidence of row-lock contention (hot accounts).
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=all",
+              "-c", "track_io_timing=on", "-c", "log_lock_waits=on", "-c", "deadlock_timeout=1s",
+              "-c", "max_connections=${PAYFLOW_PG_MAX_CONNECTIONS:-100}"]
+    # Resource limits make capacity numbers reproducible: every measurement is "per this footprint".
+    cpus: ${PAYFLOW_PG_CPUS:-2}
+    mem_limit: 1g
+    volumes:
+      - ../../deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:${PAYFLOW_PG_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d payflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo:
+    image: mongo:8.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: payflow_fraud
+      # Consumed by deploy/mongo/init to create the application user (readWrite on payflow_fraud only).
+      PAYFLOW_MONGO_PASSWORD: ${PAYFLOW_MONGO_PASSWORD:?set PAYFLOW_MONGO_PASSWORD in .env}
+    volumes:
+      - ../../deploy/mongo/init:/docker-entrypoint-initdb.d:ro
+      - mongodata:/data/db
+    cpus: 1
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:${PAYFLOW_MONGO_HOST_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kafka:
+    # WP-02 broker configuration (PLAINTEXT, no authorizer), as measured in the WP-03 baseline.
+    image: apache/kafka:4.2.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${PAYFLOW_KAFKA_HOST_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    cpus: 2
+    mem_limit: 1536m
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    ports:
+      - "127.0.0.1:${PAYFLOW_KAFKA_HOST_PORT:-9092}:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    command: ["start-dev", "--import-realm", "--http-port=8081"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      # Tokens always carry iss=http://localhost:<port>/realms/payflow; the API validates exactly that issuer.
+      KC_HOSTNAME: http://localhost:${PAYFLOW_KEYCLOAK_HOST_PORT:-8081}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      # Resolved by the realm import (placeholders in deploy/keycloak/realm-payflow.json).
+      PAYFLOW_TREASURY_CLIENT_SECRET: ${PAYFLOW_TREASURY_CLIENT_SECRET:?set in .env}
+      PAYFLOW_OPS_CLIENT_SECRET: ${PAYFLOW_OPS_CLIENT_SECRET:?set in .env}
+      PAYFLOW_MONITORING_CLIENT_SECRET: ${PAYFLOW_MONITORING_CLIENT_SECRET:?set in .env}
+      PAYFLOW_DEMO_USER_PASSWORD: ${PAYFLOW_DEMO_USER_PASSWORD:?set in .env}
+    volumes:
+      - ../../deploy/keycloak/realm-payflow.json:/opt/keycloak/data/import/realm-payflow.json:ro
+    ports:
+      - "127.0.0.1:${PAYFLOW_KEYCLOAK_HOST_PORT:-8081}:8081"
+
+  payflow:
+    image: payflow:wp02-baseline
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      PAYFLOW_DB_URL: jdbc:postgresql://postgres:5432/payflow
+      PAYFLOW_DB_USER: payflow_app
+      PAYFLOW_DB_PASSWORD: ${PAYFLOW_DB_PASSWORD}
+      SPRING_FLYWAY_USER: payflow_migrator
+      SPRING_FLYWAY_PASSWORD: ${PAYFLOW_DB_MIGRATION_PASSWORD}
+      PAYFLOW_MONGO_URI: mongodb://payflow_fraud_app:${PAYFLOW_MONGO_PASSWORD}@mongo:27017/payflow_fraud?authSource=payflow_fraud
+      PAYFLOW_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      PAYFLOW_SETTLEMENT_RAIL_URL: http://settlement-rail:8090
+      PAYFLOW_JWT_ISSUER: http://localhost:${PAYFLOW_KEYCLOAK_HOST_PORT:-8081}/realms/payflow
+      PAYFLOW_SECURITY_JWT_JWK_SET_URI: http://keycloak:8081/realms/payflow/protocol/openid-connect/certs
+      PAYFLOW_TRACE_EXPORT_ENABLED: "true"
+      PAYFLOW_TRACE_SAMPLING: ${PAYFLOW_TRACE_SAMPLING:-1.0}
+      PAYFLOW_OTLP_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+      PAYFLOW_DB_POOL_SIZE: ${PAYFLOW_DB_POOL_SIZE:-20}
+      # Experiment knobs (docs/performance): defaults are the production-intended values.
+      PAYFLOW_KAFKA_PARTITIONS: ${PAYFLOW_KAFKA_PARTITIONS:-6}
+      PAYFLOW_OUTBOX_PIPELINED: ${PAYFLOW_OUTBOX_PIPELINED:-true}
+      PAYFLOW_OUTBOX_DRAIN_BUDGET: ${PAYFLOW_OUTBOX_DRAIN_BUDGET:-1s}
+      PAYFLOW_RATE_LIMIT_PAYMENTS_PER_SUBJECT: ${PAYFLOW_RATE_LIMIT_PAYMENTS_PER_SUBJECT:-20}
+      PAYFLOW_ADMISSION_MAX_OUTBOX_AGE: ${PAYFLOW_ADMISSION_MAX_OUTBOX_AGE:-60s}
+      JAVA_TOOL_OPTIONS: ${PAYFLOW_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError}
+    # One PayFlow instance = 2 vCPU / 1.5 GiB. Capacity is always reported per instance of this size.
+    cpus: ${PAYFLOW_APP_CPUS:-2}
+    mem_limit: 1536m
+    ports:
+      - "127.0.0.1:${PAYFLOW_API_HOST_PORT:-8080}:8080"
+    # Container hardening: immutable root filesystem, no privilege escalation, no Linux capabilities.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------------------------- observability
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    depends_on: [keycloak]
+    environment:
+      PAYFLOW_MONITORING_CLIENT_SECRET: ${PAYFLOW_MONITORING_CLIENT_SECRET}
+    # The scrape secret is written to a file inside the container's own data volume (Prometheus reads secrets from
+    # files, not environment variables) and never appears in the committed configuration.
+    entrypoint: ["/bin/sh", "-c", "umask 077 && printf '%s' \"$$PAYFLOW_MONITORING_CLIENT_SECRET\" > /prometheus/.monitoring-client-secret && exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=7d --web.enable-lifecycle"]
+    volumes:
+      - ../../deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../deploy/observability/prometheus/rules:/etc/prometheus/rules:ro
+      - promdata:/prometheus
+    ports:
+      - "127.0.0.1:${PAYFLOW_PROMETHEUS_HOST_PORT:-9090}:9090"
+    cpus: 1
+    mem_limit: 1g
+
+  grafana:
+    image: grafana/grafana:13.2.2
+    depends_on: [prometheus, tempo]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ../../deploy/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../../deploy/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${PAYFLOW_GRAFANA_HOST_PORT:-3000}:3000"
+    cpus: 1
+    mem_limit: 512m
+
+  tempo:
+    image: grafana/tempo:2.10.8
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ../../deploy/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempodata:/var/tempo
+    cpus: 1
+    mem_limit: 1g
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["--collector.stat_statements", "--collector.long_running_transactions"]
+    environment:
+      DATA_SOURCE_URI: postgres:5432/payflow?sslmode=disable
+      DATA_SOURCE_USER: payflow_monitor
+      DATA_SOURCE_PASS: ${PAYFLOW_DB_MONITOR_PASSWORD}
+    cpus: 0.5
+    mem_limit: 128m
+
+volumes:
+  pgdata:
+  mongodata:
+  kafkadata:
+  promdata:
+  tempodata:

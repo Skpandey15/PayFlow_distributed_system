@@ -44,7 +44,14 @@ public class InboxStore {
     /** Deduplication window = retention. Older redeliveries must be absorbed by natural business keys. */
     public int purgeBefore(String inboxTable, Instant cutoff) {
         requireValidTable(inboxTable);
-        return jdbc.update("delete from " + inboxTable + " where processed_at < ?", Timestamp.from(cutoff));
+        int total = 0;
+        int removed;
+        do { // bounded batches: short statements, no long lock or vacuum spike
+            removed = jdbc.update("delete from " + inboxTable + " where ctid in (select ctid from " + inboxTable
+                    + " where processed_at < ? limit 5000)", Timestamp.from(cutoff));
+            total += removed;
+        } while (removed >= 5000);
+        return total;
     }
 
     private static void requireValidTable(String table) {

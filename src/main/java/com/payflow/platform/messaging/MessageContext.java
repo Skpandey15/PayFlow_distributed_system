@@ -32,9 +32,15 @@ public final class MessageContext {
     public static final String OFFSET = "offset";
     public static final String CONSUMER_GROUP = "consumerGroup";
     public static final String RETRY_ATTEMPT = "retryAttempt";
+    /** WP-03 resilience context, set by outbound adapters so the boundary's single log line carries it. */
+    public static final String DEPENDENCY = "dependency";
+    public static final String CIRCUIT_BREAKER_STATE = "circuitBreakerState";
+    public static final String DELIVERY_OUTCOME = "deliveryOutcome";
+    public static final String DEPENDENCY_ATTEMPTS = "dependencyAttempts";
 
     private static final String[] CONSUMER_KEYS = {CORRELATION_ID, CAUSATION_ID, SAGA_ID, EVENT_ID, EVENT_TYPE,
-            EVENT_VERSION, AGGREGATE_ID, TOPIC, PARTITION, OFFSET, CONSUMER_GROUP, RETRY_ATTEMPT};
+            EVENT_VERSION, AGGREGATE_ID, TOPIC, PARTITION, OFFSET, CONSUMER_GROUP, RETRY_ATTEMPT, DEPENDENCY,
+            CIRCUIT_BREAKER_STATE, DELIVERY_OUTCOME, DEPENDENCY_ATTEMPTS};
 
     private MessageContext() {
     }

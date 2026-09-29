@@ -1,0 +1,54 @@
+# Lab-only test double for the external settlement rails.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rail-simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: rail-simulator}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: rail-simulator}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10002
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: rail-simulator
+          image: payflow-rail-simulator:wp03
+          imagePullPolicy: IfNotPresent
+          ports: [{name: http, containerPort: 8090}]
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rail-simulator
+spec:
+  selector: {app.kubernetes.io/name: rail-simulator}
+  ports: [{name: http, port: 8090, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rail-simulator
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: rail-simulator}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: payflow}
+      ports: [{port: 8090}]

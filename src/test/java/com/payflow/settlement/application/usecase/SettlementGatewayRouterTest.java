@@ -23,6 +23,16 @@ class SettlementGatewayRouterTest {
             public GatewayResponse submit(GatewayInstruction instruction) {
                 return GatewayResponse.accepted(rail.name());
             }
+
+            @Override
+            public java.util.Optional<GatewayResponse> inquire(String idempotencyKey) {
+                return java.util.Optional.empty();
+            }
+
+            @Override
+            public GatewayResponse voidInstruction(String idempotencyKey) {
+                return GatewayResponse.declined("VOIDED");
+            }
         };
     }
 

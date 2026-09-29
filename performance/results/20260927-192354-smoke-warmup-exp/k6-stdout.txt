@@ -1,0 +1,7 @@
+
+window null .. 2026-09-27T13:54:41.035Z
+http_req_duration{name:POST /api/v1/payments}: {"min":0,"med":0,"p(90)":0,"p(95)":0,"p(99)":0,"max":0,"count":0}
+http_req_duration: {"p(99)":62.53434573,"max":62.854376,"count":2,"min":30.851349,"med":46.8528625,"p(90)":59.65407330000001,"p(95)":61.25422465}
+http_reqs: {"count":2,"rate":20.3492161542985}
+checks: {"fails":0,"rate":0,"passes":0}
+http_req_duration{expected_response:true}: {"p(95)":30.851349,"p(99)":30.851349,"max":30.851349,"count":1,"min":30.851349,"med":30.851349,"p(90)":30.851349}

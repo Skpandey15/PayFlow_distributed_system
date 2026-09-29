@@ -66,6 +66,11 @@ public class MessagingMetrics {
         Counter.builder("payflow.events.replayed").tag("topic", topic).register(registry).increment();
     }
 
+    /** Latency timer; percentile histograms are switched on per name prefix in {@code management.metrics.distribution}. */
+    public void time(String name, Duration duration, String... tags) {
+        Timer.builder(name).tags(tags).register(registry).record(duration);
+    }
+
     public void count(String name, String... tags) {
         Counter.builder(name).tags(tags).register(registry).increment();
     }
