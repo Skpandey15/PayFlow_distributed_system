@@ -1,0 +1,4 @@
+inject  08:43:07: docker update --cpus 0.15 payflow-kafka-1
+payflow-kafka-1
+recover 08:44:37: docker update --cpus 2 payflow-kafka-1
+payflow-kafka-1

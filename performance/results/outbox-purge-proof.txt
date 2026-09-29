@@ -1,0 +1,2 @@
+before 08:34:09: payment=435584 account=109096 settlement=54448 size=477 MB
+after  08:41:09: payment=0 account=0 settlement=0 size=41 MB

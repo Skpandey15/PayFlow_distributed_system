@@ -1,0 +1,4 @@
+inject  08:48:31: docker update --cpus 0.1 payflow-postgres-1
+payflow-postgres-1
+recover 08:49:31: docker update --cpus 2 payflow-postgres-1
+payflow-postgres-1

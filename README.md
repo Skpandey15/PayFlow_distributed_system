@@ -85,12 +85,13 @@ Each run writes `performance/results/<run-id>/report.md`. The failure experiment
 | Failure matrices | [WP-02](docs/failures/WP-02-FAILURE-MATRIX.md) · [WP-03](docs/failures/WP-03-FAILURE-MATRIX.md) |
 | Architecture reviews | [WP-01](docs/reviews/WP-01-ARCHITECTURE-REVIEW.md) · [WP-02](docs/reviews/WP-02-ARCHITECTURE-REVIEW.md) · [WP-03](docs/reviews/WP-03-ARCHITECTURE-REVIEW.md) |
 | Interview defense | [WP-01](docs/interview/WP-01-INTERVIEW-DEFENSE.md) · [WP-02](docs/interview/WP-02-INTERVIEW-DEFENSE.md) · [WP-03](docs/interview/WP-03-INTERVIEW-DEFENSE.md) |
-| Kubernetes | [deploy/k8s](deploy/k8s) (base + k3d-lab overlay) |
+| Kubernetes | [deploy/k8s](deploy/k8s) (base + k3d-lab overlay; `deploy.sh` then `smoke.sh` deploys to a throwaway k3d cluster and settles one payment) |
 | Kafka ACL matrix (as code) | [deploy/kafka/acl-matrix.sh](deploy/kafka/acl-matrix.sh) |
 
 ## Roadmap
 
 Next (from the WP-03 review):
+- Pause the settlement consumer while the rail circuit is open (review R-2), and adaptive admission (P-2).
 - Per-service extraction with per-service Kafka identities and databases.
 - TLS/mTLS for Kafka.
 - Sharded relay or CDC and sub-accounts for 10×.

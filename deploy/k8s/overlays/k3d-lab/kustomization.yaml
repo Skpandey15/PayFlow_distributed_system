@@ -1,14 +1,15 @@
-# Local k3d lab: one replica, the platform services from docker-compose reached through the host, and the rail
-# simulator in-cluster. Create the Secret from your .env first (never committed):
-#   kubectl -n payflow create secret generic payflow-secrets \
-#     --from-literal=db-password="$PAYFLOW_DB_PASSWORD" \
-#     --from-literal=mongo-uri="mongodb://payflow_fraud_app:$PAYFLOW_MONGO_PASSWORD@host.k3d.internal:27017/payflow_fraud?authSource=payflow_fraud"
+# Local k3d lab. The k3d cluster joins the docker-compose network (payflow_default), and the platform services
+# (PostgreSQL, Kafka, MongoDB, Keycloak, Tempo) are the compose containers, reached by their compose names through
+# hostAliases that deploy.sh generates from the live container IPs (pod DNS cannot resolve Docker's embedded DNS).
+# One replica; run it with the compose `payflow` container stopped so there is only one set of consumers.
+#   ENV_FILE=.env deploy/k8s/overlays/k3d-lab/deploy.sh
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: payflow
 resources:
   - ../../base
   - rail-simulator.yaml
+  - lab-egress.yaml
 patches:
   - target: {kind: Deployment, name: payflow}
     patch: |-
@@ -24,16 +25,16 @@ patches:
     patch: |-
       - op: replace
         path: /data/PAYFLOW_DB_URL
-        value: jdbc:postgresql://host.k3d.internal:5432/payflow
+        value: jdbc:postgresql://postgres:5432/payflow
       - op: replace
         path: /data/PAYFLOW_KAFKA_BOOTSTRAP_SERVERS
-        value: host.k3d.internal:9092
+        value: kafka:29092
       - op: replace
         path: /data/PAYFLOW_JWT_ISSUER
         value: http://localhost:8081/realms/payflow
       - op: replace
         path: /data/PAYFLOW_SECURITY_JWT_JWK_SET_URI
-        value: http://host.k3d.internal:8081/realms/payflow/protocol/openid-connect/certs
+        value: http://keycloak:8081/realms/payflow/protocol/openid-connect/certs
       - op: replace
         path: /data/PAYFLOW_SETTLEMENT_RAIL_URL
         value: http://rail-simulator:8090
@@ -42,4 +43,4 @@ patches:
         value: "1"
       - op: replace
         path: /data/PAYFLOW_OTLP_TRACES_ENDPOINT
-        value: http://host.k3d.internal:4318/v1/traces
+        value: http://tempo:4318/v1/traces

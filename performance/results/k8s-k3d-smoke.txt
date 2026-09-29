@@ -1,0 +1,30 @@
+# k3d-lab smoke test 2026-09-29T09:44:38Z (cluster payflow-lab, compose payflow container stopped)
+## namespace labels
+{"app.kubernetes.io/part-of":"payflow","kubernetes.io/metadata.name":"payflow","pod-security.kubernetes.io/audit":"restricted","pod-security.kubernetes.io/enforce":"restricted"}
+## pods
+NAME                              READY   STATUS    RESTARTS   AGE     IP           NODE                       NOMINATED NODE   READINESS GATES
+payflow-679d6ff74f-npgdp          1/1     Running   0          44s     10.42.0.10   k3d-payflow-lab-server-0   <none>           <none>
+payflow-679d6ff74f-rvvl5          1/1     Running   0          44s     10.42.0.9    k3d-payflow-lab-server-0   <none>           <none>
+payflow-679d6ff74f-wsmrl          1/1     Running   0          9m52s   10.42.0.8    k3d-payflow-lab-server-0   <none>           <none>
+rail-simulator-594568559f-9wsbt   1/1     Running   0          17m     10.42.0.5    k3d-payflow-lab-server-0   <none>           <none>
+## payflow pod securityContext / probes / restarts
+{"fsGroup":10001,"runAsGroup":10001,"runAsNonRoot":true,"runAsUser":10001,"seccompProfile":{"type":"RuntimeDefault"}}
+{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}
+restarts=0 ready=true
+{"fsGroup":10001,"runAsGroup":10001,"runAsNonRoot":true,"runAsUser":10001,"seccompProfile":{"type":"RuntimeDefault"}}
+{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}
+restarts=0 ready=true
+{"fsGroup":10001,"runAsGroup":10001,"runAsNonRoot":true,"runAsUser":10001,"seccompProfile":{"type":"RuntimeDefault"}}
+{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true}
+restarts=0 ready=true
+## readiness
+{"status":"UP"}
+## note: the HPA (min 1 in the lab overlay) scaled to 3 on startup CPU; the payment settled with 3 consumer instances
+## end-to-end
+payment=01a0ec8d-581d-7736-82ab-068d600455be status=SETTLED
+## logs: SASL mechanism in the Kafka client config, ERROR lines
+Found 3 pods, using pod/payflow-679d6ff74f-wsmrl
+error_log_lines=0
+Found 3 pods, using pod/payflow-679d6ff74f-wsmrl
+SCRAM-SHA-512\n\tsasl.oauthbearer.assertion.algorithm
+SCRAM-SHA-512\n\tsasl.oauthbearer.assertion.algorithm

@@ -1,0 +1,182 @@
+{
+  "run": "20260929-144958-degraded-fault-F22-restart",
+  "window": {
+    "start": "2026-09-29T09:20:01.580000+00:00",
+    "loadEnd": "2026-09-29T09:23:01.584000+00:00",
+    "drainEnd": "2026-09-29T09:23:47.584000+00:00",
+    "rateScale": "1",
+    "durationOverride": "3m"
+  },
+  "client": {
+    "iterations": 3594,
+    "iterations_per_s": 19.798042804757195,
+    "dropped_iterations": 6,
+    "payments_accepted": 3355,
+    "payments_throttled": 0,
+    "payments_rejected_at_api": 239,
+    "checks_pass_rate": 0.9547605527162597,
+    "post_p50_ms": 67.00410249999999,
+    "post_p95_ms": 518.0003482499998,
+    "post_p99_ms": 917.6408503100005,
+    "post_max_ms": 2081.121826
+  },
+  "server": {
+    "accepted_per_s": 18.1029,
+    "api_5xx_ratio": 0.0,
+    "api_post_p50_ms": 52.6,
+    "api_post_p95_ms": 294.1,
+    "api_post_p99_ms": 606.4,
+    "api_get_p99_ms": 199.2,
+    "saga_completed": 3338.6364,
+    "saga_completion_by_outcome": {
+      "outcome=COMPLETED": 3338.6364
+    },
+    "saga_p50_ms": 38177.5,
+    "saga_p95_ms": 81538.4,
+    "saga_p99_ms": 89608.5,
+    "saga_step_p99_ms": {
+      "step=AWAITING_CAPTURE": 22540.2,
+      "step=AWAITING_FUNDS": 22681.1,
+      "step=AWAITING_RISK": 30814.7,
+      "step=AWAITING_SETTLEMENT": 27333.5
+    },
+    "drain_seconds_after_load": 46,
+    "saga_open_at_load_end": {
+      "step=AWAITING_CAPTURE": 404.0,
+      "step=AWAITING_FUNDS": 463.0,
+      "step=AWAITING_RISK": 194.0,
+      "step=AWAITING_SETTLEMENT": 359.0,
+      "step=COMPENSATING": 0.0,
+      "step=MANUAL_REVIEW": 0.0
+    },
+    "saga_open_after_drain": {
+      "step=AWAITING_CAPTURE": 0.0,
+      "step=AWAITING_FUNDS": 0.0,
+      "step=AWAITING_RISK": 0.0,
+      "step=AWAITING_SETTLEMENT": 0.0,
+      "step=COMPENSATING": 0.0,
+      "step=MANUAL_REVIEW": 0.0
+    },
+    "saga_open_max": {
+      "step=AWAITING_CAPTURE": 538.0,
+      "step=AWAITING_FUNDS": 522.0,
+      "step=AWAITING_RISK": 513.0,
+      "step=AWAITING_SETTLEMENT": 359.0,
+      "step=COMPENSATING": 0.0,
+      "step=MANUAL_REVIEW": 0.0
+    },
+    "outbox_publish_delay_p50_ms": 234.0,
+    "outbox_publish_delay_p99_ms": 6617.4,
+    "outbox_publish_delay_p99_by_outbox_ms": {
+      "outbox=account.outbox_event": 2507.6,
+      "outbox=payment.outbox_event": 7604.9,
+      "outbox=settlement.outbox_event": 2231.8
+    },
+    "outbox_send_p99_ms": 402.3,
+    "outbox_published_per_s": 165.9543,
+    "outbox_backlog_max": {
+      "outbox=account.outbox_event": 10.0,
+      "outbox=payment.outbox_event": 219.0,
+      "outbox=settlement.outbox_event": 7.0
+    },
+    "outbox_oldest_age_max_s": {
+      "outbox=account.outbox_event": 0.0,
+      "outbox=payment.outbox_event": 5.0,
+      "outbox=settlement.outbox_event": 0.0
+    },
+    "consumer_lag_max_top5": {
+      "group=payment-service,topic=funds.events": 829.0,
+      "group=payment-service,topic=settlement.events": 372.0,
+      "group=fraud-service,topic=fraud.commands": 367.0,
+      "group=payment-service,topic=fraud.events": 354.0,
+      "group=settlement-service,topic=settlement.commands": 60.0
+    },
+    "consumer_p99_ms": {
+      "consumer=fraud-service": 443.9,
+      "consumer=settlement-service": 417.5,
+      "consumer=ledger-service": 89.3,
+      "consumer=payment-service": 116.1,
+      "consumer=account-service": 166.8
+    },
+    "events_consumed_per_s": 148.4286,
+    "events_failed": {
+      "category=TRANSIENT_INFRASTRUCTURE": 0.0,
+      "category=CONCURRENCY": 0.0
+    },
+    "events_dead_lettered": 0,
+    "hikari_active_max": 15.0,
+    "hikari_pending_max": 0.0,
+    "hikari_acquire_max_ms": 410.0,
+    "hikari_acquire_avg_ms": 0.3,
+    "hikari_usage_avg_ms": 20.8,
+    "hikari_timeouts": 0,
+    "pg_commits_per_s": 444.44,
+    "pg_rollbacks": 0.0,
+    "pg_deadlocks": 0,
+    "pg_backends_max": 23.0,
+    "mongo_cmd_max_ms": 196.3,
+    "mongo_cmd_avg_ms": 4.9,
+    "jvm_heap_used_max_mb": 286,
+    "jvm_heap_after_gc_max_mb": 125,
+    "jvm_heap_committed_max_mb": 364,
+    "gc_pause_max_ms": 60.0,
+    "gc_pause_total_ms": 1576.9,
+    "gc_count": 132.5182,
+    "alloc_rate_mb_s": 70.2,
+    "threads_max": 195.0,
+    "process_cpu_avg": 0.8015,
+    "process_cpu_max": 1.0
+  },
+  "containers": {
+    "payflow-payflow-1": {
+      "cpu_avg_pct": 167.6,
+      "cpu_max_pct": 205.64,
+      "mem_max_mib": 762
+    },
+    "payflow-postgres-exporter-1": {
+      "cpu_avg_pct": 0.7,
+      "cpu_max_pct": 2.97,
+      "mem_max_mib": 13
+    },
+    "payflow-postgres-1": {
+      "cpu_avg_pct": 38.5,
+      "cpu_max_pct": 65.77,
+      "mem_max_mib": 623
+    },
+    "payflow-mongo-1": {
+      "cpu_avg_pct": 14.1,
+      "cpu_max_pct": 51.61,
+      "mem_max_mib": 217
+    },
+    "payflow-kafka-1": {
+      "cpu_avg_pct": 37.0,
+      "cpu_max_pct": 175.67,
+      "mem_max_mib": 1158
+    },
+    "payflow-keycloak-1": {
+      "cpu_avg_pct": 0.5,
+      "cpu_max_pct": 3.69,
+      "mem_max_mib": 756
+    },
+    "payflow-settlement-rail-1": {
+      "cpu_avg_pct": 1.4,
+      "cpu_max_pct": 8.85,
+      "mem_max_mib": 57
+    },
+    "payflow-tempo-1": {
+      "cpu_avg_pct": 1.1,
+      "cpu_max_pct": 5.63,
+      "mem_max_mib": 146
+    },
+    "payflow-grafana-1": {
+      "cpu_avg_pct": 1.4,
+      "cpu_max_pct": 2.35,
+      "mem_max_mib": 318
+    },
+    "payflow-prometheus-1": {
+      "cpu_avg_pct": 0.7,
+      "cpu_max_pct": 1.31,
+      "mem_max_mib": 88
+    }
+  }
+}

@@ -1,0 +1,20 @@
+scenario=F15-rebalance-extra-instance inject_at=60s fault=90s load=3m
+time_to_quiet_after_recover_s=119
+report=/d/PayFlow_distributed_system/performance/results/20260929-144438-degraded-fault-F15-rebalance-extra-instance
+acceptance_by_status={"201": 3659.081, "503": 0.0}
+shed_by_policy={"concurrency": 0.0}
+saga_outcomes={"COMPLETED": 3628.896}
+completion_p99_ms={"value": 9659.186}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 0.0}
+recovery_held={}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 0.0, "CONCURRENCY": 0.0}
+dead_lettered={"fraud.commands": 0.0, "settlement.commands": 0.0}
+rail_outcomes={"ACCEPTED": 3611.822, "SETTLEMENT_RAIL_CIRCUIT_OPEN": 0.0, "SETTLEMENT_RAIL_TIMEOUT": 0.0}
+max_outbox_age_s={"value": 0.0}
+alerts_fired={"PaymentAcceptanceBudgetSlowBurn": 1.0, "PaymentCompletionSlow": 1.0, "DeadLettersAppearing": 1.0, "DeadLetterSpike": 1.0}
+reconciliation={"runId":"01a0ec76-a76c-71e8-b951-5ccbaa628757","skipped":false,"duration":"PT0.283S","recordsChecked":304293,"findingsByCheck":{}}
+open_mismatches=none
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0
