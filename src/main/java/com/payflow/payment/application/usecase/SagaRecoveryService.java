@@ -6,6 +6,7 @@ import com.payflow.payment.application.port.out.PaymentEventPublisherPort;
 import com.payflow.payment.application.port.out.PaymentRepositoryPort;
 import com.payflow.payment.application.port.out.PaymentSagaRepositoryPort;
 import com.payflow.payment.application.port.out.SagaCommandPort;
+import com.payflow.payment.application.port.out.SettlementParkingPort;
 import com.payflow.payment.domain.Payment;
 import com.payflow.payment.domain.saga.PaymentSaga;
 import com.payflow.payment.domain.saga.SagaStep;
@@ -23,6 +24,9 @@ import java.util.List;
  *   <li>If retries remain, <b>re-issue the current step's command</b>. Every participant is idempotent per
  *       payment, so a re-issue either does the work that was lost (for example the command sat in a DLT) or
  *       re-announces the result that was lost.</li>
+ *   <li>Exception: a settlement parked while its rail's circuit is open is <b>deferred</b>, with no command and no
+ *       retry used. The Settlement context's resumer owns it (review R-2); re-issuing only produced no-op commands
+ *       (1,097 in F-11) and, in a long outage, would exhaust the retry budget for a known "not sent" outcome.</li>
  *   <li>If retries are exhausted, compensate <b>only where it is safe</b> (see
  *       {@link PaymentSaga#onRetriesExhausted}); otherwise escalate to MANUAL_REVIEW.</li>
  * </ol>
@@ -39,6 +43,7 @@ public class SagaRecoveryService implements RecoverStuckSagasUseCase {
     private final Clock clock;
     private final SagaPolicy policy;
     private final CommandPublicationHealthPort publication;
+    private final SettlementParkingPort parking;
 
     public SagaRecoveryService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas, SagaCommandPort commands,
                                PaymentEventPublisherPort events, TransactionRunner tx, Clock clock, SagaPolicy policy) {
@@ -48,7 +53,14 @@ public class SagaRecoveryService implements RecoverStuckSagasUseCase {
     public SagaRecoveryService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas, SagaCommandPort commands,
                                PaymentEventPublisherPort events, TransactionRunner tx, Clock clock, SagaPolicy policy,
                                CommandPublicationHealthPort publication) {
+        this(payments, sagas, commands, events, tx, clock, policy, publication, paymentId -> false);
+    }
+
+    public SagaRecoveryService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas, SagaCommandPort commands,
+                               PaymentEventPublisherPort events, TransactionRunner tx, Clock clock, SagaPolicy policy,
+                               CommandPublicationHealthPort publication, SettlementParkingPort parking) {
         this.publication = publication;
+        this.parking = parking;
         this.payments = payments;
         this.sagas = sagas;
         this.commands = commands;
@@ -101,6 +113,10 @@ public class SagaRecoveryService implements RecoverStuckSagasUseCase {
     }
 
     private Recovery decide(PaymentSaga saga, Payment payment, Instant now) {
+        if (saga.step() == SagaStep.AWAITING_SETTLEMENT && parking.isParked(saga.paymentId())) {
+            saga.deferWhileSettlementParked(now);
+            return new Recovery(RecoveryAction.SETTLEMENT_PARKED, () -> { });
+        }
         if (!saga.retriesExhausted(policy.maxStepAttempts())) {
             saga.recordRetry(now);
             return new Recovery(RecoveryAction.COMMAND_REISSUED, () -> reissueCurrentCommand(saga, payment));

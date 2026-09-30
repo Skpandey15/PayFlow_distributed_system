@@ -5,6 +5,7 @@ import com.payflow.payment.application.port.out.CommandPublicationHealthPort;
 import com.payflow.payment.application.port.out.IdempotencyStorePort;
 import com.payflow.payment.application.port.out.ManualReviewAuditPort;
 import com.payflow.payment.application.port.out.SettlementEvidencePort;
+import com.payflow.payment.application.port.out.SettlementParkingPort;
 import com.payflow.payment.application.port.out.PaymentEventPublisherPort;
 import com.payflow.payment.application.port.out.PaymentRepositoryPort;
 import com.payflow.payment.application.port.out.PaymentSagaRepositoryPort;
@@ -73,8 +74,9 @@ class PaymentModuleConfiguration {
     SagaRecoveryService sagaRecoveryService(PaymentRepositoryPort payments, PaymentSagaRepositoryPort sagas,
                                             SagaCommandPort commands, PaymentEventPublisherPort events,
                                             TransactionRunner tx, Clock clock, SagaProperties properties,
-                                            CommandPublicationHealthPort publication) {
-        return new SagaRecoveryService(payments, sagas, commands, events, tx, clock, properties.toPolicy(), publication);
+                                            CommandPublicationHealthPort publication, SettlementParkingPort parking) {
+        return new SagaRecoveryService(payments, sagas, commands, events, tx, clock, properties.toPolicy(), publication,
+                parking);
     }
 
     @Bean

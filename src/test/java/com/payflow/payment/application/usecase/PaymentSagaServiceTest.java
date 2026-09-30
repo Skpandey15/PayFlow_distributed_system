@@ -122,6 +122,34 @@ class PaymentSagaServiceTest {
         verify(events, org.mockito.Mockito.atLeastOnce()).publish(anyList());
     }
 
+    /** R-2 follow-up: a parked settlement belongs to the Settlement context's resumer; recovery defers it. */
+    @Test
+    void recoveryDefersAParkedSettlementWithoutACommandOrARetry() {
+        SagaPolicy policy = new SagaPolicy(Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofMinutes(2),
+                Duration.ofSeconds(30), Duration.ofSeconds(30), 1, 10);
+        orchestrator.onRiskAssessed(id, true, null);
+        orchestrator.onFundsReserved(id); // AWAITING_SETTLEMENT
+        int attemptsBefore = sagas.findByPaymentId(id).orElseThrow().stepAttempts();
+
+        // Many step timeouts in a row (a long rail outage): never escalated, never re-issued.
+        for (int minutes = 3; minutes <= 30; minutes += 3) {
+            SagaRecoveryService parked = new SagaRecoveryService(payments, sagas, commands, events, tx,
+                    Clock.fixed(NOW.plusSeconds(minutes * 60L), ZoneOffset.UTC), policy, () -> Duration.ZERO, p -> true);
+            assertThat(parked.recoverOverdueSagas().actions()).singleElement()
+                    .extracting("action").isEqualTo(RecoveryAction.SETTLEMENT_PARKED);
+        }
+        assertThat(sagas.findByPaymentId(id).orElseThrow().stepAttempts()).isEqualTo(attemptsBefore);
+        assertThat(sagas.findByPaymentId(id).orElseThrow().step()).isEqualTo(SagaStep.AWAITING_SETTLEMENT);
+        verify(commands, times(1)).submitSettlement(any(), any()); // only the original command
+
+        // Not parked (or parking switched off): the normal re-issue path applies.
+        SagaRecoveryService notParked = new SagaRecoveryService(payments, sagas, commands, events, tx,
+                Clock.fixed(NOW.plusSeconds(35 * 60L), ZoneOffset.UTC), policy, () -> Duration.ZERO, p -> false);
+        assertThat(notParked.recoverOverdueSagas().actions()).singleElement()
+                .extracting("action").isEqualTo(RecoveryAction.COMMAND_REISSUED);
+        verify(commands, times(2)).submitSettlement(any(), any());
+    }
+
     /** WP-03: an unpublished command is not an unanswered command. Recovery holds instead of amplifying a backlog. */
     @Test
     void recoveryHoldsWhileCommandsAreNotBeingPublished() {

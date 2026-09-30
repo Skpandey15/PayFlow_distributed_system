@@ -81,6 +81,12 @@ public class SubmitSettlementService implements SubmitSettlementUseCase, ResumeP
         return submit(settlement);
     }
 
+    @Override
+    public boolean isParked(UUID paymentId) {
+        return parking && tx.readOnly(() -> settlements.findByPaymentId(paymentId)).map(SubmitSettlementService::isParked)
+                .orElse(false);
+    }
+
     private static boolean isParked(Settlement settlement) {
         return settlement.status() == SettlementStatus.PENDING
                 && GatewayUnavailableException.CIRCUIT_OPEN.equals(settlement.lastErrorCode());

@@ -1,0 +1,20 @@
+scenario=F11-retry-storm-attempt inject_at=60s fault=120s load=4m
+time_to_quiet_after_recover_s=287
+report=/mnt/d/PayFlow_distributed_system/performance/results/20260930-075849-degraded-fault-F11-retry-storm-attempt
+acceptance_by_status={"201": 4754.893}
+shed_by_policy={}
+saga_outcomes={"COMPLETED": 4817.413}
+completion_p99_ms={"value": 356767.736}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 15.369, "SETTLEMENT_PARKED": 1179.351}
+recovery_held={}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 41.688, "CONCURRENCY": 0.0}
+dead_lettered={}
+rail_outcomes={"ACCEPTED": 4818.522, "SETTLEMENT_RAIL_CIRCUIT_OPEN": 2970.028, "SETTLEMENT_RAIL_CONNECTION_LOST": 50.845}
+max_outbox_age_s={"value": 1.0}
+alerts_fired={"SettlementCircuitOpen": 2.0, "PaymentAcceptanceLatencyBudgetBurn": 1.0}
+reconciliation={"runId":"01a0f15a-181d-7462-bfed-ce153dc8022b","skipped":false,"duration":"PT0.078244S","recordsChecked":16995,"findingsByCheck":{}}
+open_mismatches=none
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

@@ -1,5 +1,7 @@
 package com.payflow.settlement;
 
+import com.payflow.payment.application.port.in.RecoverStuckSagasUseCase;
+import com.payflow.payment.application.port.in.RecoverStuckSagasUseCase.RecoveryAction;
 import com.payflow.railsim.RailSimulator;
 import com.payflow.settlement.application.port.in.SubmitSettlementUseCase;
 import com.payflow.settlement.application.port.in.SubmitSettlementUseCase.Method;
@@ -46,6 +48,8 @@ class SettlementParkingIT {
     RailSimulator rail;
     @Autowired
     SubmitSettlementUseCase submit;
+    @Autowired
+    RecoverStuckSagasUseCase recovery;
 
     ApiClient api;
     String alice;
@@ -124,6 +128,28 @@ class SettlementParkingIT {
         assertThat(rail.recordedStatus("CARD_NETWORK", parked.toString())).as("the rail was not called").isNull();
 
         jdbc.update("update settlement.settlement set last_attempt_at = now() - interval '1 minute' where payment_id = ?", parked);
+        api.awaitStatus(alice, parked, "SETTLED");
+    }
+
+    @Test
+    void sagaRecoveryDefersAParkedSettlementInsteadOfReissuingIt() throws Exception {
+        card().transitionToForcedOpenState();
+        UUID parked = pay("CARD");
+        await().atMost(Duration.ofSeconds(30)).ignoreExceptions().until(() ->
+                "SETTLEMENT_RAIL_CIRCUIT_OPEN".equals(settlement(parked).get("last_error_code")));
+        await().atMost(Duration.ofSeconds(10)).until(() -> "AWAITING_SETTLEMENT".equals(api.sagaStep(parked)));
+
+        // The step is long overdue (a long outage), with the retry budget already spent.
+        jdbc.update("update payment.payment_saga set step_started_at = now() - interval '1 hour', step_attempts = 3"
+                + " where payment_id = ?", parked);
+        var report = recovery.recoverOverdueSagas();
+        assertThat(report.actions()).filteredOn(a -> a.paymentId().value().equals(parked))
+                .singleElement().extracting(a -> a.action()).isEqualTo(RecoveryAction.SETTLEMENT_PARKED);
+        assertThat(api.sagaStep(parked)).as("not escalated to manual review: nothing was sent").isEqualTo("AWAITING_SETTLEMENT");
+        assertThat(jdbc.queryForObject("select step_attempts from payment.payment_saga where payment_id = ?",
+                Integer.class, parked)).as("no retry used").isEqualTo(3);
+
+        card().transitionToClosedState();
         api.awaitStatus(alice, parked, "SETTLED");
     }
 }

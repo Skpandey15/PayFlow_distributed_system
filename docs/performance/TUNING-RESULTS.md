@@ -233,6 +233,14 @@ recovery to re-issue it. Money is safe, but DLT alerts fire for a known outage a
 - The budget is per instance and per rail. With N replicas the total resume rate is N × 10/s per rail, which matches
   the N × completion capacity.
 
+**Follow-up: saga recovery defers parked settlements.** Recovery used to re-issue a parked payment's command at
+every 2-minute step timeout. The commands were no-ops (1,097 in F-11), and in an outage longer than the retry budget
+(3 attempts, about 6 minutes) they would escalate payments with a known "not sent" outcome to manual review. Recovery
+now asks the Settlement context whether the settlement is parked (a local read). If it is, recovery restarts the step
+timer without a command or a retry (`payflow_saga_recovery_total{action="SETTLEMENT_PARKED"}`). With parking switched
+off the answer is always "no", so nothing is stranded. F-11 re-run: re-issued commands 1,097 → 15, deferrals 1,179,
+0 DLT, data-safety checks clean (`failure-F11-retry-storm-attempt-20260930-075849`).
+
 **Measurement note:** the first parking-on run after a host shutdown was invalidated (`*-contaminated-overnight-backlog`).
 Payments parked overnight completed during its window: 4,825 completions for 3,606 accepted, and completion p99 at
 the 10-minute histogram cap. Always check the database for open sagas before a run on a freshly restarted stack.
@@ -282,7 +290,11 @@ the work in progress bounds completion time whatever the offered load.
 - **The cost** is throughput under sustained overload: 52/s instead of 64–68/s. More payments get a fast 503 instead
   of being accepted and then waiting minutes. That is the intended trade: refuse cleanly rather than accept work that
   cannot finish in time.
-- A limit around 400 may recover part of that throughput; it is the next tuning run.
+- **Limit 400 was tried to win back throughput, and rejected** (`*-burst/stress-window400-wsl`). Stress throughput
+  rose only to 56.4/s (completion p99 21.7 s), while burst acceptance p99 rose to 651 ms (client 776 ms), outside the
+  SLO. Burst completion p99 was 22.0 s. The burst run also had a 760 ms GC pause, which the other runs did not;
+  a single run cannot separate that from the setting, but 300 is ahead on every burst number, and bursts are the
+  common overload shape. 300 stays.
 - The limit is global (the database count), so with N replicas it should scale with N: roughly
   limit ≈ total throughput × target completion time.
 
