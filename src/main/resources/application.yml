@@ -263,13 +263,14 @@ payflow:
         max-concurrent-calls: 16
         inquiry-max-concurrent-calls: 2
     parked:
-      # R-2: settlements parked while a rail's circuit is open are re-submitted at a bounded rate: 5 per rail per second,
-      # at most 15/s for 3 rails, about 30 % of one instance's completion capacity (≈ 49/s, CAPACITY-PLAN). Every
-      # resumed settlement brings capture, ledger and saga work; faster drains (unbounded, then 20/s per rail) saturated
-      # the connection pool and hurt acceptance of new payments (TUNING-RESULTS §10).
+      # R-2: settlements parked while a rail's circuit is open are re-submitted at a bounded rate: 10 per rail per second.
+      # Every resumed settlement brings capture, ledger and saga work, so recovery must leave room for new payments within
+      # one instance's completion capacity (≈ 49/s, CAPACITY-PLAN). Measured in F-07 (TUNING-RESULTS §10): 5/s per rail
+      # gave the best acceptance p99 (28 ms) but no faster completion than without parking; 10/s halves recovery time with
+      # acceptance p99 183 ms, inside the SLO; unbounded draining saturated the connection pool.
       enabled: ${PAYFLOW_SETTLEMENT_PARKING:true}   # false = kill switch back to fail-and-retry (WP-03 behaviour)
       resume-interval-ms: 1000
-      batch-size: ${PAYFLOW_SETTLEMENT_PARKED_BATCH_SIZE:5}
+      batch-size: ${PAYFLOW_SETTLEMENT_PARKED_BATCH_SIZE:10}
   reconciliation:
     # Continuous reconciliation (K4). Grace: records younger than this are in flight, not drift.
     interval-ms: ${PAYFLOW_RECONCILIATION_INTERVAL_MS:300000}

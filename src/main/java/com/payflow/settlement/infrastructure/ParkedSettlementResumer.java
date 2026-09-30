@@ -20,10 +20,10 @@ import java.util.Map;
  * card outage leaves the UPI and bank backlogs untouched, and while the card circuit is open, each run costs one
  * fast-failing call for that rail.
  *
- * <p>The resume rate is <b>bounded</b> (one batch per rail per interval, default 5/s per rail), on purpose. Once a
- * rail recovers, every parked settlement is followed by capture, ledger and saga work. The first live F-07 run with an
- * unbounded drain (about 2,200 parked) saturated the connection pool (47 waiting, 4.1 s acquire) and pushed acceptance
- * p99 to 2.9 s; 20/s per rail still did (31 waiting). Recovery must not crowd out new payments.
+ * <p>The resume rate is <b>bounded</b> (one batch per rail per interval, default 10/s per rail), on purpose. Once
+ * a rail recovers, every parked settlement is followed by capture, ledger and saga work. An unbounded drain in F-07
+ * (about 2,200 parked) saturated the connection pool (47 waiting, 4.1 s acquire) and pushed acceptance p99 to 2.9 s.
+ * Recovery must not crowd out new payments. The rate trade-off is measured in TUNING-RESULTS §10.
  */
 @Component
 @ConditionalOnProperty(name = "payflow.settlement.parked.enabled", havingValue = "true", matchIfMissing = true)
@@ -37,7 +37,7 @@ class ParkedSettlementResumer {
     private final Map<SettlementRail, Boolean> backlog = new EnumMap<>(SettlementRail.class);
 
     ParkedSettlementResumer(ResumeParkedSettlementsUseCase resumer, MessagingMetrics metrics,
-                            @Value("${payflow.settlement.parked.batch-size:5}") int batchSize) {
+                            @Value("${payflow.settlement.parked.batch-size:10}") int batchSize) {
         this.resumer = resumer;
         this.metrics = metrics;
         this.batchSize = batchSize;

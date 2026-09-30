@@ -31,7 +31,7 @@ None open. Two blockers were found **during** WP-03 and fixed; both are measured
 | O-2 | ~~Failure campaign reduced~~ **Mostly closed.** 12 of 24 scenarios now run LIVE (F-01..F-08, F-14, F-15, F-21, F-22), all with clean data-safety checks; the rest are IT/PERF-backed; F-11 is scripted but not run live | untested interactions for the IT-only rows | the rest need multi-node infrastructure | ITs with real containers | full `failure-campaign.sh` weekly |
 | K1' | Kafka authenticated and authorised but **not encrypted**; the monolith uses one identity | payload sniffing on the network; a compromised app can write any PayFlow topic | TLS/mTLS certificate management out of scope | SCRAM, deny-by-default ACLs, per-service matrix applied and verified | Platform: SASL_SSL/mTLS; identities on extraction |
 | R-1 | Reconciliation reads four schemas (documented exception to isolation) and scans the full ledger each run | cost grows with data | only way to get one consistent snapshot | read-only, advisory-locked, duration metric | incremental reconciliation before 10× |
-| R-2 | A slow or failing rail opens the circuit; circuit-open settlement commands are NOT_SENT failures that go through the retry topics to the DLT, and saga recovery re-issues them (F-07: 1,373 DLT, 446 s to quiet) | DLT alerts fire for a known rail outage, and completion recovers slowly | money is safe (NOT_SENT is never charged; recovery converges) | DeadLetterSpike + circuit-state panel | pause the settlement consumer while the rail circuit is open (or hold the command), instead of burning retries into the DLT |
+| R-2 | ~~Circuit-open settlement commands go through retry → DLT → saga re-issue~~ **Closed.** They are now parked and resumed per rail at a bounded rate, and the resumer is their only driver. Same-host F-07 (TUNING-RESULTS §10): 1,526 → 0 DLT, time to quiet 376 → 178 s, completion p99 361 → 202 s, acceptance p99 242 → 183 ms. There's a kill switch (`PAYFLOW_SETTLEMENT_PARKING=false`) | saga re-issues still fire for parked payments after the 2 min settlement timeout (harmless no-ops, but they inflate the recovery metric) | – | `payflow_settlement_parked_total`, `payflow_settlement_resumed_total`, circuit-state panel | let saga recovery skip payments whose settlement is parked (needs a settlement-state query from the payment context) |
 | M4 (WP-01) | Schema isolation by convention | unchanged | unchanged | unchanged | extraction |
 
 ### MINOR
@@ -176,7 +176,7 @@ None open. Two blockers were found **during** WP-03 and fixed; both are measured
     batch allowed to finish; offsets are committed only after the business transaction (F-21).
 22. **Zero Trust gaps remaining:** Kafka TLS, one Kafka identity, dev-mode Keycloak, `.env` secrets, no four-eyes
     approval, unauthenticated rail-simulator admin API (lab only).
-23. **Operational risks remaining:** P-1, P-2, P-3, R-2, O-2 (reduced to IT-only rows), a Docker-flaky lab.
+23. **Operational risks remaining:** P-1, P-2, P-3, O-2 (reduced to IT-only rows), a Docker-flaky lab.
 24. **Architectural trade-offs remaining:**
     - A single relay per outbox (ordering over throughput).
     - Reconciliation crosses schemas.

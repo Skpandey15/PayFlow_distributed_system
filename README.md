@@ -91,7 +91,7 @@ Each run writes `performance/results/<run-id>/report.md`. The failure experiment
 ## Roadmap
 
 Next (from the WP-03 review):
-- Pause the settlement consumer while the rail circuit is open (review R-2), and adaptive admission (P-2).
+- Adaptive admission (review P-2).
 - Per-service extraction with per-service Kafka identities and databases.
 - TLS/mTLS for Kafka.
 - Sharded relay or CDC and sub-accounts for 10×.

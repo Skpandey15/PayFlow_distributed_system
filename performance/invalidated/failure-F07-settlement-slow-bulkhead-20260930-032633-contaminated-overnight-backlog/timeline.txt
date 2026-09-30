@@ -1,0 +1,3 @@
+inject  03:27:35: docker exec payflow-payflow-1 wget -qO- --header='Content-Type: application/json' --post-data='{"latencyMs":1700,"jitterMs":200}' http://settlement-rail:8090/admin/faults
+{"submissions":480,"accepted":480,"declined":0,"throttled":0,"failed":0,"inquiries":0,"inFlight":0,"maxInFlight":1,"faults":{"latencyMs":1700,"jitterMs":200,"errorRate":0.0,"errorMode":"UNAVAILABLE_503","capacity":64}}recover 03:29:10: docker exec payflow-payflow-1 wget -qO- --header='Content-Type: application/json' --post-data='{}' http://settlement-rail:8090/admin/faults
+{"submissions":506,"accepted":506,"declined":0,"throttled":0,"failed":0,"inquiries":0,"inFlight":0,"maxInFlight":1,"faults":{"latencyMs":0,"jitterMs":0,"errorRate":0.0,"errorMode":"UNAVAILABLE_503","capacity":64}}

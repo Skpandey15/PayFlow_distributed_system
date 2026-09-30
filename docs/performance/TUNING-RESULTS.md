@@ -186,3 +186,54 @@ Fresh database per run; everything else as the final build.
 - **Decision:** keep 5,000 (bursts are the common overload shape) and 5 s sampling. P-2 stays open with a better
   diagnosis. A threshold cannot fix it; a smooth controller can, for example an adaptive concurrency limit (AIMD on
   the in-flight bulkhead driven by lag or latency) or token-bucket admission sized from the measured drain rate.
+
+## 10. Review R-2: park settlements while the rail's circuit is open
+
+**Problem (F-07, rail slowed to 1.7 s for 90 s):** the slow-call rate opens the rail's circuit. Every settlement
+command then fails fast as CIRCUIT_OPEN (NOT_SENT), goes through the retry topics to the DLT, and waits for saga
+recovery to re-issue it. Money is safe, but DLT alerts fire for a known outage and recovery is slow.
+
+**Change:**
+- A circuit-open failure **parks** the settlement. It stays PENDING, the evidence is recorded, and the message is
+  acknowledged, with no retry topic and no DLT.
+- `ParkedSettlementResumer` re-submits parked settlements per rail at a bounded rate. The claim uses
+  `FOR UPDATE SKIP LOCKED` plus an idle window, so replicas never re-submit the same one at once. A rail's backlog
+  does not block the other rails.
+- Parked settlements have **one driver**, the resumer. A repeated command (a saga re-issue or a redelivery) returns
+  "parked" without calling the rail.
+- Kill switch: `PAYFLOW_SETTLEMENT_PARKING=false` restores fail-and-retry.
+
+**Iterations** (evidence in `performance/invalidated/*-R2-*`; old Rancher host, so not comparable in absolute terms):
+1. **Unbounded drain.** Recovery was fast, but about 2,200 resumed settlements, plus their capture and ledger work,
+   hit at once. The pool had 47 waiting (4.1 s acquire) and acceptance p99 was 2.9 s.
+2. **20/s per rail.** There were still 31 waiting and acceptance p99 was 2.5 s.
+3. **5/s per rail.** There was no pool wait, but saga re-issues (868) drove parked settlements through the listener,
+   **bypassing the budget**. That's why a parked settlement now has a single driver.
+
+**Final A/B, same WSL host (6 vCPU, shared with a k3d cluster), 3 min at 20/s, same fault:**
+
+| F-07 | Parking off (WP-03) | Parking on, 5/s per rail | **Parking on, 10/s per rail (default)** |
+|---|---|---|---|
+| Evidence (`performance/results/`) | `20260929-185314-*` | `20260930-033616-*` | `20260930-034525-*` |
+| Dead-lettered commands | 1,526 | 0 | **0** |
+| Circuit-open rail calls (wasted) | 7,118 | 1,886 | **1,801** |
+| Saga re-issues (no-ops when parked) | 1,488 | 1,203 | **462** |
+| Time to quiet after recovery | 376 s | 336 s | **178 s** |
+| Completion p99 | 361 s | 363 s | **202 s** |
+| Acceptance p99 | 242 ms | 28 ms | **183 ms** |
+| Pool pending max / acquire max | 0 / 66 ms | 0 / 4.7 ms | 0 / 104 ms |
+| Alerts | DeadLettersAppearing, DeadLetterSpike | PaymentCompletionSlow | PaymentCompletionSlow |
+| Data safety (reconciliation, double capture/journal, SETTLED without rail completion) | clean | clean | clean |
+
+- **Decision:** 10/s per rail. It halves recovery time and completion p99, and it removes every dead letter, so the
+  only alert left is the one that describes the customer impact. Acceptance p99 stays inside the SLO and better than
+  without parking.
+- 5/s protects acceptance most (28 ms), but completion is then limited by the resume budget and is no better than
+  without parking.
+- The budget is per instance and per rail. With N replicas the total resume rate is N × 10/s per rail, which matches
+  the N × completion capacity.
+
+**Measurement note:** the first parking-on run after a host shutdown was invalidated (`*-contaminated-overnight-backlog`).
+Payments parked overnight completed during its window: 4,825 completions for 3,606 accepted, and completion p99 at
+the 10-minute histogram cap. Always check the database for open sagas before a run on a freshly restarted stack.
+
