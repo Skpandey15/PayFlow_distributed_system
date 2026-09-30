@@ -12,6 +12,12 @@ public interface ResumeParkedSettlementsUseCase {
     ResumeReport resumeParked(SettlementRail rail, int limit);
 
     /**
+     * True while the payment's settlement is parked and the resumer owns it. False when parking is switched off, so
+     * callers fall back to re-issuing and nothing parked earlier is stranded.
+     */
+    boolean isParked(java.util.UUID paymentId);
+
+    /**
      * @param claimed     parked settlements this replica took (others are skipped by concurrent replicas)
      * @param answered    re-submissions the rail answered (completed or declined)
      * @param stillParked true if the circuit refused again, so the remaining claimed ones were left for the next run

@@ -148,6 +148,20 @@ public final class PaymentSaga {
         return stepAttempts >= maxStepAttempts;
     }
 
+    /**
+     * The settlement is parked (the rail's circuit is open, nothing was sent) and the Settlement context will resume
+     * it: restart the step timer without using a retry. A long rail outage must not exhaust the retry budget and send a
+     * payment with a known "not sent" outcome to manual review.
+     */
+    public void deferWhileSettlementParked(Instant now) {
+        if (step != SagaStep.AWAITING_SETTLEMENT) {
+            throw new InvalidStateTransitionException("SAGA_NOT_AWAITING_SETTLEMENT",
+                    "Saga " + sagaId + " is " + step + ", not AWAITING_SETTLEMENT");
+        }
+        stepStartedAt = now;
+        updatedAt = now;
+    }
+
     /** Re-issue the current step's command: counts the attempt and restarts the step timer. */
     public void recordRetry(Instant now) {
         stepAttempts++;

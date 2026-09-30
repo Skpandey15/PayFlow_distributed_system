@@ -56,6 +56,9 @@ class SagaRecoveryJob {
 
     private void report(RecoveredSaga r) {
         metrics.count("payflow.saga.recovery", "action", r.action().name(), "step", r.stepBefore().name());
+        if (r.action() == RecoveryAction.SETTLEMENT_PARKED) {
+            return; // expected during a rail outage, every step timeout: the counter and SettlementCircuitOpen cover it
+        }
         try {
             MessageContext.put(MessageContext.SAGA_ID, r.sagaId());
             MessageContext.put(MessageContext.CORRELATION_ID, r.correlationId());

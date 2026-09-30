@@ -11,7 +11,9 @@ public interface RecoverStuckSagasUseCase {
 
     RecoveryReport recoverOverdueSagas();
 
-    enum RecoveryAction { COMMAND_REISSUED, PAYMENT_REJECTED, COMPENSATION_STARTED, ESCALATED_TO_MANUAL_REVIEW }
+    /** SETTLEMENT_PARKED: deferred without a command or a retry, because the Settlement context is resuming it. */
+    enum RecoveryAction { COMMAND_REISSUED, SETTLEMENT_PARKED, PAYMENT_REJECTED, COMPENSATION_STARTED,
+        ESCALATED_TO_MANUAL_REVIEW }
 
     record RecoveredSaga(UUID sagaId, PaymentId paymentId, String correlationId, SagaStep stepBefore,
                          int attemptsBefore, RecoveryAction action) {
