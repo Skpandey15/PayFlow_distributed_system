@@ -1,0 +1,1 @@
+{"type":"https://problems.payflow.example/unauthenticated","title":"Unauthorized","status":401,"detail":"A valid bearer token is required","code":"UNAUTHENTICATED","correlationId":"54921a58-ddef-4bb0-9d30-d7dbac09f322"}

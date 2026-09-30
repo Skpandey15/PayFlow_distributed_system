@@ -1,0 +1,16 @@
+Unable to find image 'grafana/k6:2.3.0' locally
+2.3.0: Pulling from grafana/k6
+4f4fb700ef54: Pulling fs layer
+20bef106a16f: Pulling fs layer
+c23814d09c35: Pulling fs layer
+4f4fb700ef54: Already exists
+c23814d09c35: Download complete
+44136fa355b3: Already exists
+c23814d09c35: Pull complete
+424cb9891c7d: Download complete
+20bef106a16f: Download complete
+4f4fb700ef54: Pull complete
+20bef106a16f: Pull complete
+Digest: sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+Status: Downloaded newer image for grafana/k6:2.3.0
+time="2026-09-29T18:56:26Z" level=error msg="thresholds on metrics 'http_req_duration{name:POST /api/v1/payments}' have been crossed"

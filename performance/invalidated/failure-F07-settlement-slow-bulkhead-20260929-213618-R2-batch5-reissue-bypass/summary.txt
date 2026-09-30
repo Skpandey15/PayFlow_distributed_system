@@ -1,0 +1,20 @@
+scenario=F07-settlement-slow-bulkhead inject_at=60s fault=90s load=3m
+time_to_quiet_after_recover_s=363
+report=/d/PayFlow_distributed_system/performance/results/20260929-213618-degraded-fault-F07-settlement-slow-bulkhead
+acceptance_by_status={"201": 3608.192}
+shed_by_policy={}
+saga_outcomes={"COMPLETED": 3612.846}
+completion_p99_ms={"value": 228154.335}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 868.803}
+recovery_held={}
+events_failed={}
+dead_lettered={}
+rail_outcomes={"ACCEPTED": 3587.671, "SETTLEMENT_RAIL_CIRCUIT_OPEN": 2077.471}
+max_outbox_age_s={"value": 10.0}
+alerts_fired={"PaymentAcceptanceLatencyBudgetBurn": 1.0, "PaymentCompletionSlow": 1.0}
+reconciliation={"type":"https://problems.payflow.example/unauthenticated","title":"Unauthorized","status":401,"detail":"A valid bearer token is required","code":"UNAUTHENTICATED","correlationId":"54921a58-ddef-4bb0-9d30-d7dbac09f322"}
+open_mismatches=
+double_capture=
+double_journal=
+settled_without_rail_completion=

@@ -8,6 +8,7 @@ import com.payflow.settlement.application.usecase.SettlementGatewayRouter;
 import com.payflow.settlement.application.usecase.SettlementOperationsService;
 import com.payflow.settlement.application.usecase.SubmitSettlementService;
 import com.payflow.shared.application.TransactionRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -25,8 +26,9 @@ class SettlementModuleConfiguration {
     @Bean
     SubmitSettlementService submitSettlementService(SettlementRepositoryPort settlements, SettlementGatewayRouter router,
                                                     SettlementEventPublisherPort events, TransactionRunner tx,
-                                                    Clock clock) {
-        return new SubmitSettlementService(settlements, router, events, tx, clock);
+                                                    Clock clock,
+                                                    @Value("${payflow.settlement.parked.enabled:true}") boolean parking) {
+        return new SubmitSettlementService(settlements, router, events, tx, clock, parking);
     }
 
     @Bean

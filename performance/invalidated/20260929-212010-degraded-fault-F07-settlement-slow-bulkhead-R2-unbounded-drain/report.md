@@ -1,0 +1,89 @@
+# Load-test report: 20260929-212010-degraded-fault-F07-settlement-slow-bulkhead
+
+Window: 2026-09-29T15:50:20.043000+00:00 to 2026-09-29T15:53:20.108000+00:00 (+62s drain). Rate scale 1.
+
+## Client (k6, open model)
+
+| Metric | Value |
+|---|---|
+| iterations | 3546 |
+| iterations_per_s | 18.856195705783456 |
+| dropped_iterations | 55 |
+| payments_accepted | 3509 |
+| payments_throttled | 19 |
+| payments_rejected_at_api | 0 |
+| checks_pass_rate | 0.996206373292868 |
+| post_p50_ms | 31.513696500000002 |
+| post_p95_ms | 476.30253299999936 |
+| post_p99_ms | 2918.98452434 |
+| post_max_ms | 5730.898742 |
+
+## Server (Prometheus)
+
+| Metric | Value |
+|---|---|
+| accepted_per_s | 19.4979 |
+| api_5xx_ratio | 0.0043 |
+| api_post_p50_ms | 28.7 |
+| api_post_p95_ms | 428.9 |
+| api_post_p99_ms | 2901.8 |
+| api_get_p99_ms | 697.9 |
+| saga_completed | 3544.3826 |
+| saga_completion_by_outcome | {"outcome=COMPLETED": 3544.3826} |
+| saga_p50_ms | 73409.1 |
+| saga_p95_ms | 154417.1 |
+| saga_p99_ms | 171255.7 |
+| saga_step_p99_ms | {"step=AWAITING_SETTLEMENT": 135295.5, "step=AWAITING_CAPTURE": 35718.2, "step=AWAITING_FUNDS": 30305.5, "step=AWAITING_RISK": 31226.2} |
+| drain_seconds_after_load | 62 |
+| saga_open_at_load_end | {"step=AWAITING_CAPTURE": 722.0, "step=AWAITING_FUNDS": 144.0, "step=AWAITING_RISK": 365.0, "step=AWAITING_SETTLEMENT": 1533.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_after_drain | {"step=AWAITING_CAPTURE": 0.0, "step=AWAITING_FUNDS": 0.0, "step=AWAITING_RISK": 0.0, "step=AWAITING_SETTLEMENT": 0.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| saga_open_max | {"step=AWAITING_CAPTURE": 1899.0, "step=AWAITING_FUNDS": 374.0, "step=AWAITING_RISK": 365.0, "step=AWAITING_SETTLEMENT": 2229.0, "step=COMPENSATING": 0.0, "step=MANUAL_REVIEW": 0.0} |
+| outbox_publish_delay_p50_ms | 219.5 |
+| outbox_publish_delay_p99_ms | 14067.4 |
+| outbox_publish_delay_p99_by_outbox_ms | {"outbox=payment.outbox_event": 14629.8, "outbox=settlement.outbox_event": 13779.9, "outbox=account.outbox_event": 3737.5} |
+| outbox_send_p99_ms | 144.4 |
+| outbox_published_per_s | 162.3934 |
+| outbox_backlog_max | {"outbox=account.outbox_event": 4.0, "outbox=payment.outbox_event": 29.0, "outbox=settlement.outbox_event": 2.0} |
+| outbox_oldest_age_max_s | {"outbox=account.outbox_event": 0.0, "outbox=payment.outbox_event": 0.0, "outbox=settlement.outbox_event": 0.0} |
+| consumer_lag_max_top5 | {"group=payment-service,topic=settlement.events": 1533.0, "group=payment-service,topic=funds.events": 1502.0, "group=account-service,topic=funds.commands": 824.0, "group=settlement-service,topic=settlement.commands": 649.0, "group=payment-service,topic=fraud.events": 445.0} |
+| consumer_p99_ms | {"consumer=ledger-service": 89.9, "consumer=payment-service": 190.5, "consumer=account-service": 189.6, "consumer=fraud-service": 187.5, "consumer=settlement-service": 1840.4} |
+| events_consumed_per_s | 134.8774 |
+| events_failed | {"category=TRANSIENT_INFRASTRUCTURE": 0.0, "category=CONCURRENCY": 0.0} |
+| events_dead_lettered | 0 |
+| hikari_active_max | 19.0 |
+| hikari_pending_max | 47.0 |
+| hikari_acquire_max_ms | 4105.3 |
+| hikari_acquire_avg_ms | 3.8 |
+| hikari_usage_avg_ms | 20.4 |
+| hikari_timeouts | 15.1457 |
+| pg_commits_per_s | 474.9846 |
+| pg_rollbacks | 1.0299 |
+| pg_deadlocks | 0 |
+| pg_backends_max | 23.0 |
+| mongo_cmd_max_ms | 667.8 |
+| mongo_cmd_avg_ms | 2.6 |
+| jvm_heap_used_max_mb | 273 |
+| jvm_heap_after_gc_max_mb | 107 |
+| jvm_heap_committed_max_mb | 291 |
+| gc_pause_max_ms | 96.0 |
+| gc_pause_total_ms | 963.1 |
+| gc_count | 100.849 |
+| alloc_rate_mb_s | 64.3 |
+| threads_max | 195.0 |
+| process_cpu_avg | 0.5825 |
+| process_cpu_max | 1.0 |
+
+## Containers (docker stats; CPU % of one core)
+
+| Container | CPU avg % | CPU max % | Mem max MiB |
+|---|---|---|---|
+| payflow-grafana-1 | 1.8 | 5.15 | 290 |
+| payflow-kafka-1 | 79.8 | 240.33 | 1019 |
+| payflow-keycloak-1 | 21.4 | 244.41 | 975 |
+| payflow-mongo-1 | 27.4 | 76.63 | 372 |
+| payflow-payflow-1 | 138.6 | 208.06 | 674 |
+| payflow-postgres-1 | 97.2 | 534.71 | 532 |
+| payflow-postgres-exporter-1 | 2.6 | 28.23 | 18 |
+| payflow-prometheus-1 | 3.0 | 27.61 | 89 |
+| payflow-settlement-rail-1 | 4.0 | 38.27 | 58 |
+| payflow-tempo-1 | 1.5 | 3.99 | 112 |

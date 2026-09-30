@@ -1,0 +1,20 @@
+scenario=F07-settlement-slow-bulkhead inject_at=60s fault=90s load=3m
+time_to_quiet_after_recover_s=376
+report=/mnt/d/PayFlow_distributed_system/performance/results/20260929-185314-degraded-fault-F07-settlement-slow-bulkhead
+acceptance_by_status={"201": 3613.276}
+shed_by_policy={}
+saga_outcomes={"COMPLETED": 3613.756}
+completion_p99_ms={"value": 360716.122}
+open_sagas_now={}
+recovery_actions={"COMMAND_REISSUED": 1488.487}
+recovery_held={}
+events_failed={"TRANSIENT_INFRASTRUCTURE": 7231.17}
+dead_lettered={"settlement.commands": 1525.882}
+rail_outcomes={"ACCEPTED": 3586.502, "SETTLEMENT_RAIL_CIRCUIT_OPEN": 7117.562}
+max_outbox_age_s={"value": 0.0}
+alerts_fired={"DeadLettersAppearing": 1.0, "DeadLetterSpike": 1.0}
+reconciliation={"runId":"01a0ee8b-a2a5-7288-94a3-08cfaf2202d0","skipped":false,"duration":"PT0.025501S","recordsChecked":13348,"findingsByCheck":{}}
+open_mismatches=none
+double_capture=0
+double_journal=0
+settled_without_rail_completion=0

@@ -11,6 +11,11 @@ import java.util.UUID;
  *
  * <p>Throws {@link com.payflow.shared.application.DependencyUnavailableException} when the rail cannot
  * be reached. The settlement then stays PENDING and the call can be retried safely.
+ *
+ * <p>Exception: when the rail's circuit is open, the instruction is <b>parked</b> instead ({@link
+ * SettlementResult#parked()}). It stays PENDING, the caller is done, and {@link ResumeParkedSettlementsUseCase}
+ * re-submits it once the rail accepts calls again. Failing would only cycle the command through the retry topics to
+ * the DLT while the rail is known to be down (review R-2).
  */
 public interface SubmitSettlementUseCase {
 
@@ -22,6 +27,6 @@ public interface SubmitSettlementUseCase {
     }
 
     record SettlementResult(UUID settlementId, UUID paymentId, boolean completed, String providerReference,
-                            String declineReason) {
+                            String declineReason, boolean parked) {
     }
 }
