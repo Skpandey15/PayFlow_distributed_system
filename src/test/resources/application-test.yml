@@ -26,6 +26,8 @@ payflow:
   traffic:
     # Concurrency tests fire bursts from one subject on purpose; TrafficControlIT checks the real limits.
     payments-per-subject-per-second: 10000
+    # Same reason: the work-in-progress window is covered by unit tests; bursts here must not be shed.
+    admission-max-in-flight: 0
   saga:
     # Tests drive recovery explicitly (backdating step_started_at), never on a timer.
     recovery-interval-ms: 3600000

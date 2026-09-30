@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Overload control at the HTTP edge, applied after authentication (limits are per verified subject) and before any
@@ -39,6 +40,9 @@ import java.util.concurrent.Semaphore;
  *       older than the admission threshold, new payments get 503 + Retry-After. Kafka being briefly down does not
  *       trip it (payments are still accepted into the outbox, WP-02 degraded mode); a sustained backlog does, before
  *       the backlog grows without bound and every accepted payment misses its completion SLO.</li>
+ *   <li><b>Work-in-progress window</b> (review P-2): new payments are admitted only while there is room under a
+ *       limit on the payments still in PayFlow's pipeline ({@link InFlightAdmission}), so completion time stays
+ *       bounded under sustained overload and bursts alike.</li>
  *   <li><b>Rate limiting</b>: 429 + Retry-After per subject on payment creation and on state-changing ops endpoints.</li>
  * </ol>
  * Reads, health and metrics are never throttled here. Every rejection is counted
@@ -49,11 +53,15 @@ public class TrafficControlInterceptor implements HandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger("payflow.traffic");
     private static final Duration ADMISSION_CACHE = Duration.ofSeconds(1);
+    /** Short, so one window's credits are small next to the room even at hundreds of requests per second. */
+    private static final Duration WINDOW_SAMPLE = Duration.ofMillis(250);
 
     private final SubjectRateLimiters payments;
     private final SubjectRateLimiters ops;
     private final OutboxRelayScheduler outboxes;
     private final ObjectProvider<KafkaLagMonitor> lag;
+    private final ObjectProvider<InFlightWork> work;
+    private final InFlightAdmission inFlightAdmission;
     private final TrafficControlProperties properties;
     private final MeterRegistry meters;
     private final JsonMapper json;
@@ -61,11 +69,16 @@ public class TrafficControlInterceptor implements HandlerInterceptor {
     private final Semaphore inFlight;
     private volatile Instant admissionCheckedAt = Instant.EPOCH;
     private volatile boolean admissionOpen = true;
+    private volatile long workInProgress;
+    private volatile Instant windowSampledAt = Instant.EPOCH;
+    private final AtomicLong credits = new AtomicLong(Long.MAX_VALUE);
 
     public TrafficControlInterceptor(TrafficControlProperties properties, OutboxRelayScheduler outboxes,
-                                     ObjectProvider<KafkaLagMonitor> lag,
+                                     ObjectProvider<KafkaLagMonitor> lag, ObjectProvider<InFlightWork> work,
                                      MeterRegistry meters, JsonMapper json, Clock clock) {
         this.lag = lag;
+        this.work = work;
+        this.inFlightAdmission = new InFlightAdmission(properties.admissionMaxInFlight());
         this.properties = properties;
         this.outboxes = outboxes;
         this.meters = meters;
@@ -78,6 +91,12 @@ public class TrafficControlInterceptor implements HandlerInterceptor {
         if (inFlight != null) {
             Gauge.builder("payflow.traffic.payments.in_flight", inFlight,
                             s -> properties.maxConcurrentPaymentRequests() - s.availablePermits())
+                    .strongReference(true).register(meters);
+        }
+        if (inFlightAdmission.enabled()) {
+            Gauge.builder("payflow.traffic.admission.work_in_progress", this, t -> t.workInProgress)
+                    .strongReference(true).register(meters);
+            Gauge.builder("payflow.traffic.admission.credits", credits, c -> Math.min(c.get(), 1_000_000))
                     .strongReference(true).register(meters);
         }
     }
@@ -95,6 +114,10 @@ public class TrafficControlInterceptor implements HandlerInterceptor {
                 return reject(response, "admission", HttpStatus.SERVICE_UNAVAILABLE, "PAYMENTS_TEMPORARILY_UNAVAILABLE",
                         "Payment intake is paused while queued payments are processed. Retry later.",
                         properties.admissionRetryAfter());
+            }
+            if (!takeCredit()) {
+                return reject(response, "work-in-progress", HttpStatus.SERVICE_UNAVAILABLE, "PAYMENTS_BUSY",
+                        "Many payments are being processed right now. Retry shortly.", Duration.ofSeconds(2));
             }
             if (!limit(response, payments, "payments")) {
                 return false;
@@ -156,6 +179,25 @@ public class TrafficControlInterceptor implements HandlerInterceptor {
             }
         }
         return admissionOpen;
+    }
+
+    /** One credit per admitted payment; a new window (half the free room) every {@link #WINDOW_SAMPLE}. */
+    private boolean takeCredit() {
+        var source = work.getIfAvailable();
+        if (!inFlightAdmission.enabled() || source == null) {
+            return true;
+        }
+        Instant now = clock.instant();
+        if (now.isAfter(windowSampledAt.plus(WINDOW_SAMPLE))) {
+            windowSampledAt = now;
+            try {
+                workInProgress = source.count();
+                credits.set(inFlightAdmission.credits(workInProgress));
+            } catch (RuntimeException e) {
+                credits.set(Long.MAX_VALUE); // same reasoning as above: never add a failure mode of our own
+            }
+        }
+        return credits.getAndUpdate(c -> c > 0 ? c - 1 : 0) > 0;
     }
 
     private boolean reject(HttpServletResponse response, String policy, HttpStatus status, String code, String detail,

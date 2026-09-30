@@ -113,6 +113,7 @@ Measured in the failure campaign (F-11 retry storm).
 | payments | each authenticated subject | `POST /api/v1/payments` | 20/s, no queueing | 429 + `Retry-After: 1` | A human never approaches it; a looping script or stolen token does. |
 | ops | each operator | `POST /api/v1/ops/**` (DLT replay, manual-review decisions, reconciliation runs) | 10/min | 429 | Stops scripted mass actions on money-moving operations. |
 | admission | all callers | `POST /api/v1/payments` | while oldest unpublished outbox event > 60 s | 503 + `Retry-After: 30` | Beyond 60 s every new payment misses the completion SLO; accepting more only deepens the backlog. |
+| work-in-progress window | all callers | `POST /api/v1/payments` | payments in PayFlow's own pipeline ≤ 300; every 250 ms, half the free room is granted as credits | 503 `PAYMENTS_BUSY` + `Retry-After: 2` | Little's law: bounding work in progress bounds completion time. A window cannot oscillate like a threshold gate (TUNING-RESULTS §11). |
 
 Limits are per instance (Resilience4j is in-process): with N replicas a subject can get N × 20/s. A cluster-wide
 limit belongs in the API gateway. Idle buckets are evicted after 10 minutes, so memory is bounded by active

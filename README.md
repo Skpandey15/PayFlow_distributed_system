@@ -91,7 +91,6 @@ Each run writes `performance/results/<run-id>/report.md`. The failure experiment
 ## Roadmap
 
 Next (from the WP-03 review):
-- Adaptive admission (review P-2).
 - Per-service extraction with per-service Kafka identities and databases.
 - TLS/mTLS for Kafka.
 - Sharded relay or CDC and sub-accounts for 10×.

@@ -61,6 +61,14 @@ class InMemoryPaymentSagaRepository implements PaymentSagaRepositoryPort {
     }
 
     @Override
+    public long countInPipeline() {
+        return rows.values().stream().filter(s -> switch (s.step()) {
+            case AWAITING_RISK, AWAITING_FUNDS, AWAITING_CAPTURE, COMPENSATING -> true;
+            default -> false;
+        }).count();
+    }
+
+    @Override
     public List<StepCount> countOpenByStep() {
         return rows.values().stream().filter(s -> !s.step().isTerminal())
                 .collect(java.util.stream.Collectors.groupingBy(PaymentSagaSnapshot::step))

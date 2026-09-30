@@ -23,6 +23,10 @@ import java.time.Duration;
  *                                    nothing else bounds how many requests wait for a database connection; WP-03
  *                                    stress showed 1,292 of them parked on the pool, the heap filling, and a 38 s
  *                                    stop-the-world GC. Excess requests now get an immediate 503 instead.
+ * @param admissionMaxInFlight        work-in-progress limit for payment admission (0 = off): payments still in
+ *                                    PayFlow's own pipeline. Admission is a window of half the free room, refreshed
+ *                                    every 250 ms (InFlightAdmission). Size = throughput x target completion time
+ *                                    (Little's law).
  */
 @ConfigurationProperties("payflow.traffic")
 public record TrafficControlProperties(
@@ -31,5 +35,6 @@ public record TrafficControlProperties(
         @DefaultValue("60s") Duration admissionMaxOutboxAge,
         @DefaultValue("30s") Duration admissionRetryAfter,
         @DefaultValue("0") int maxConcurrentPaymentRequests,
-        @DefaultValue("0") long admissionMaxConsumerLag) {
+        @DefaultValue("0") long admissionMaxConsumerLag,
+        @DefaultValue("0") long admissionMaxInFlight) {
 }

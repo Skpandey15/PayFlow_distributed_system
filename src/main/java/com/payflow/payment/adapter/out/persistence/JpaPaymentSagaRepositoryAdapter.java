@@ -71,6 +71,11 @@ class JpaPaymentSagaRepositoryAdapter implements PaymentSagaRepositoryPort {
     }
 
     @Override
+    public long countInPipeline() {
+        return repository.countInPipeline();
+    }
+
+    @Override
     public List<StepCount> countOpenByStep() {
         return repository.countOpenByStep().stream()
                 .map(r -> new StepCount(SagaStep.valueOf((String) r[0]), ((Number) r[1]).longValue(), toInstant(r[2])))

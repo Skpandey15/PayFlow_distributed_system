@@ -22,6 +22,11 @@ public class SagaMonitoringService implements SagaMonitoringUseCase {
     }
 
     @Override
+    public long inPipeline() {
+        return tx.readOnly(sagas::countInPipeline);
+    }
+
+    @Override
     public List<OpenStep> openSagas() {
         Instant now = clock.instant();
         return tx.readOnly(sagas::countOpenByStep).stream()
