@@ -237,3 +237,52 @@ recovery to re-issue it. Money is safe, but DLT alerts fire for a known outage a
 Payments parked overnight completed during its window: 4,825 completions for 3,606 accepted, and completion p99 at
 the 10-minute histogram cap. Always check the database for open sagas before a run on a freshly restarted stack.
 
+## 11. Review P-2: a work-in-progress window replaces lag-threshold admission
+
+**Problem:** under bursts and sustained overload, admission let in more than the pipeline could finish. Accepted
+payments then queued for minutes (completion p99 113 s burst, 215 s stress on this host), while the SLO is 99 %
+within 30 s. The lag threshold (§9) could not fix it: a gate on a sampled, lagging signal oscillates.
+
+**Change:** admission is bounded by **work in progress**, the payments whose saga waits on PayFlow's own processing
+(risk, funds, capture, compensation). Settlement waits on an external rail with its own protection, and manual review
+waits on a human, so neither counts. By Little's law, completion time = work in progress / throughput, so bounding
+the work in progress bounds completion time whatever the offered load.
+- The signal is a count over a subset of `ix_payment_saga_in_flight`, read at most every 250 ms per replica.
+- Admission is a **window**: each 250 ms sample grants half of the free room (`limit - work in progress`) as credits.
+  Excess requests get 503 `PAYMENTS_BUSY` with `Retry-After: 2`. Admissions can never outrun the room, and half the
+  room keeps two replicas from jointly overshooting.
+- New metrics: `payflow_traffic_admission_work_in_progress`, `payflow_traffic_admission_credits`, and
+  `payflow_traffic_rejected_total{policy="work-in-progress"}`.
+- The lag gate is off by default (the property remains); with the window, consumer lag stayed under 250.
+
+**Iterations** (all on the WSL host, fresh stack per run, 90 s warm-up):
+1. **Soft ramp** (shed linearly from 80 % to 100 % of 500, sampled every second). Completion improved (burst p99
+   21 s), but accepted payments got slower: burst p99 of 201 responses was 1,118 ms, client max 5.5 s. The time
+   series showed the admit ratio at 0 % while 27–63 payments/s were still being accepted. At 150 requests/s, one second
+   of full admission overshot the whole 100-payment ramp, which is bang-bang again. Evidence:
+   `performance/invalidated/*wip500-wsl-soft-ramp-oscillated`.
+2. **Window, limit 500.** Stable (work in progress 466–509 during bursts), but burst completion p99 was 30.9 s,
+   just outside the SLO, and each burst's first window admitted a ~234-payment slug.
+3. **Window, limit 300** (the default).
+
+| | Lag 5,000 (WP-03) | Window 500 | **Window 300 (default)** |
+|---|---|---|---|
+| Evidence (`performance/results/`) | `*-burst/stress-lag5000-wsl` | `*-burst/stress-window500-wsl` | `*-burst/stress-window300-wsl` |
+| **Burst** completion p50 / p99 | 69 s / 113 s | 1.8 s / 30.9 s | **1.8 s / 18.7 s** |
+| Burst acceptance p99, server / client | 344 / 388 ms | 213 / 288 ms | **116 / 151 ms** |
+| Burst accepted / shed | 41.8/s / 80 | 23.6/s / 7,218 | 25.1/s / 6,660 |
+| Burst pool waiting max, consumer lag max | 10, 2,895 | 32, 321 | **5, 186** |
+| **Stress** completion p50 / p99 | 112 s / 215 s | 6.7 s / 22.1 s | **5.8 s / 25.0 s** |
+| Stress acceptance p99 | 132 ms | 58 ms | 84 ms |
+| Stress accepted throughput | 68.3/s | 64.0/s | 52.1/s |
+| Stress drain after load, consumer lag max | 96 s, 7,800 | 32 s, 347 | **32 s, 216** |
+
+- **Decision: 300.** It is the only setting that meets both SLOs (acceptance p99 < 300 ms, completion p99 < 30 s) in
+  both scenarios. Bursts are the common overload shape.
+- **The cost** is throughput under sustained overload: 52/s instead of 64–68/s. More payments get a fast 503 instead
+  of being accepted and then waiting minutes. That is the intended trade: refuse cleanly rather than accept work that
+  cannot finish in time.
+- A limit around 400 may recover part of that throughput; it is the next tuning run.
+- The limit is global (the database count), so with N replicas it should scale with N: roughly
+  limit ≈ total throughput × target completion time.
+

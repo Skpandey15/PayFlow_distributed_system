@@ -333,7 +333,9 @@ and slow-call rate, bulkhead permits.
 
 **Steps:**
 1. Which status codes? 503 with code `PAYMENTS_TEMPORARILY_UNAVAILABLE` = admission shedding (go to *Outbox
-   backlog*). 503 `DependencyUnavailable` = DB or pool. 500 = bug (logs: `unhandled exception`, one line per
+   backlog*). 503 `PAYMENTS_BUSY` = the work-in-progress window is full: offered load is above what the pipeline
+   completes (check `payflow_traffic_admission_work_in_progress`; scale out, or raise
+   `PAYFLOW_ADMISSION_MAX_IN_FLIGHT` with replicas). 503 `DependencyUnavailable` = DB or pool. 500 = bug (logs: `unhandled exception`, one line per
    request with correlationId).
 2. Recent deploy? Roll back first, investigate second.
 3. `PayFlowTargetDown`: is the instance down (kubectl/docker), or is the IdP down (the scrape token is refused)?

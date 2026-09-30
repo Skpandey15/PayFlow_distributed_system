@@ -19,8 +19,9 @@
 with completion the binding constraint. The assumed normal load (20/s) and peak (50/s) are inside it: see
 TUNING-RESULTS.md §2 for the measured SLO status per scenario.
 
-**Saturation point:** offered load above ≈ 50 payments/s is shed. In-flight limit and consumer-lag admission
-return 503 + Retry-After; the system stays up, accepted payments complete, and nothing is lost.
+**Saturation point:** offered load above ≈ 50 payments/s is shed. The in-flight request limit and the
+work-in-progress window (review P-2) return 503 + Retry-After; the system stays up, accepted payments complete within
+the SLO, and nothing is lost.
 
 ## 2. Model per target payment rate R (payments/s)
 

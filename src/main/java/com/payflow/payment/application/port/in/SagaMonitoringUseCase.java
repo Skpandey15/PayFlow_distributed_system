@@ -13,6 +13,9 @@ public interface SagaMonitoringUseCase {
 
     List<OpenStep> openSagas();
 
+    /** Payments whose saga is waiting on PayFlow's own processing (see PaymentSagaRepositoryPort#countInPipeline). */
+    long inPipeline();
+
     record OpenStep(SagaStep step, long count, Duration oldestAge) {
     }
 }

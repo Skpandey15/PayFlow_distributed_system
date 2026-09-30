@@ -40,4 +40,9 @@ interface SpringDataPaymentSagaRepository extends JpaRepository<PaymentSagaJpaEn
 
     @Query(value = "select count(*) from payment.payment_saga where step = 'MANUAL_REVIEW'", nativeQuery = true)
     long countInManualReview();
+
+    /** Admission signal, read once per second per replica: a subset of ix_payment_saga_in_flight's predicate. */
+    @Query(value = "select count(*) from payment.payment_saga"
+            + " where step in ('AWAITING_RISK', 'AWAITING_FUNDS', 'AWAITING_CAPTURE', 'COMPENSATING')", nativeQuery = true)
+    long countInPipeline();
 }

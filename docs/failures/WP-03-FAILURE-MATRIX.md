@@ -10,12 +10,12 @@
 Each LIVE run ends with a data-safety check: a reconciliation run (nine invariants) plus SQL checks for double
 capture, double ledger journal, and SETTLED without a completed settlement.
 
-**Scope actually executed:** 12 LIVE scenarios: F-01, F-03, F-06, F-14, F-21 in the first campaign, then F-02, F-04,
-F-05, F-07, F-08, F-15, F-22 in the gap-closing campaign (3 min of 20 payments/s each, fault at 60 s). Every one
+**Scope actually executed:** 13 LIVE scenarios: F-01, F-03, F-06, F-14, F-21 in the first campaign, then F-02, F-04,
+F-05, F-07, F-08, F-15, F-22 in the gap-closing campaign, and F-11 after R-2 (3 min of 20 payments/s each, fault at 60 s). Every one
 ended with 0 open mismatches, 0 double capture, 0 double journal and 0 SETTLED without a completed settlement.
 
 Note: the first F-06 attempt injected its fault into host port 8090, which on this lab host is a Jenkins instance, not the rail simulator. Jenkins rejected the request (403, nothing changed there), and the run measured a healthy rail. It was invalidated (`performance/invalidated/`) and re-run with in-network injection. The others rely on IT or PERF
-evidence, or on design only where stated. F-11 is the only scripted scenario still not run live.
+evidence, or on design only where stated. Every scripted scenario has now run live (F-11 last, with the pre-P-2 admission settings; admission plays no part in it).
 
 Note on `alerts_fired`: the query covers the scenario window, so an alert still firing from the previous scenario
 (for example the DLT alerts after F-07) also shows in the next one's summary.
@@ -59,7 +59,7 @@ Note on `alerts_fired`: the query covers the scenario window, so an alert still 
 | F-08 | Timeout / unknown outcome (30 % TIMEOUT_AFTER_ACCEPT for 90 s) | **LIVE** `failure-F08-settlement-timeout-unknown-outcome-20260929-143916`: 131 rail timeouts; every one resolved to the rail's recorded ACCEPTED outcome (same-key retry/inquiry); all 3,670 COMPLETED; 0 DLT; 0 re-issues. Also **IT** `timeoutIsAnUnknownOutcomeNeverADeclineAndIsNotRetried` | delay (completion p99 82 s) | **never declined on timeout; 0 double settlement, 0 SETTLED without a completed settlement** | rail outcome `TIMEOUT` | same-key retry / inquiry; 165 s to quiet | C1 missed during the fault |
 | F-09 | Circuit breaker opens | **LIVE** F-06 (52 real calls, then fast failures) + **IT** | fast failure instead of hanging | – | circuit-state panel, alert | – | – |
 | F-10 | Half-open recovery | **IT** `circuitOpens…RecoversThroughHalfOpen` | – | – | state-change log | automatic after 15 s | – |
-| F-11 | Retry storm attempt | **LIVE** F-06: 3,600 payments during a full outage produced 52 calls to the rail; the breaker absorbed 6,799 attempts, and recovery re-issue is paced by the 2-min step timeout | – | – | retry and rail call counters | – | – |
+| F-11 | Retry storm attempt (rail resets every connection for ~2 min under 4 min of load) | **LIVE** `failure-F11-retry-storm-attempt-20260930-063831`: only **68 submissions reached the failing rail**; 2,888 attempts were refused locally by the open circuits (parked, NOT_SENT); 0 DLT; all 4,785 accepted payments COMPLETED. Also F-06 (full outage: 52 rail calls for 3,600 payments) | settlements delayed (completion p99 346 s while the parked backlog drains at the bounded resume rate) | 0 mismatches, 0 double capture or journal, 0 SETTLED without a completed settlement | SettlementCircuitOpen **fired** (card and bank); retry and rail-call counters | automatic: half-open probes, then the resumer; 262 s to quiet | C1 missed during the outage |
 | F-12 | Bulkhead saturation | **IT** `bulkheadCapsConcurrentCalls…` (in flight ≤ limit; BULKHEAD_FULL = NOT_SENT; breaker unaffected) | – | – | bulkhead permits panel | – | – |
 | F-13 | Rate-limit exhaustion | **IT** `TrafficControlIT` (429 + Retry-After per subject; other subjects unaffected); PERF hot-account-final2 (50,363 shed) | offending caller throttled | – | traffic rejected panel | – | 429 not counted against A1 |
 | F-14 | Consumer crash (SIGKILL) | **LIVE**: 20 s kill under load; all 2,905 payments completed; 1 recovery re-issue; 0 double effects; plus IT crash-before/after-commit (WP-02) | acceptance down for 20 s (a single instance) | inbox/idempotency: 0 duplicates | target down, burn rate | restart; offsets committed after processing | A1 for the downtime |

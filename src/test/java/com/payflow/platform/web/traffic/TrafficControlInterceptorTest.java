@@ -23,8 +23,9 @@ class TrafficControlInterceptorTest {
 
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final TrafficControlInterceptor interceptor = new TrafficControlInterceptor(
-            new TrafficControlProperties(1000, 10, Duration.ofSeconds(60), Duration.ofSeconds(30), 2, 0),
+            new TrafficControlProperties(1000, 10, Duration.ofSeconds(60), Duration.ofSeconds(30), 2, 0, 0),
             new OutboxRelayScheduler(List.of(), null, Clock.systemUTC()), new StaticListableBeanFactory().getBeanProvider(KafkaLagMonitor.class),
+            new StaticListableBeanFactory().getBeanProvider(InFlightWork.class),
             meters, JsonMapper.builder().build(),
             Clock.systemUTC());
 
@@ -58,6 +59,26 @@ class TrafficControlInterceptorTest {
         assertThat(interceptor.preHandle(createPayment(), new MockHttpServletResponse(), null))
                 .as("a completed request returns its slot").isTrue();
         assertThat(meters.get("payflow.traffic.rejected").tag("policy", "concurrency").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void workInProgressWindowAdmitsHalfTheFreeRoomThenSheds() throws Exception {
+        StaticListableBeanFactory beans = new StaticListableBeanFactory();
+        beans.addBean("work", (InFlightWork) () -> 90); // limit 100: room 10, window 5
+        TrafficControlInterceptor windowed = new TrafficControlInterceptor(
+                new TrafficControlProperties(1000, 10, Duration.ofSeconds(60), Duration.ofSeconds(30), 0, 0, 100),
+                new OutboxRelayScheduler(List.of(), null, Clock.systemUTC()),
+                new StaticListableBeanFactory().getBeanProvider(KafkaLagMonitor.class), beans.getBeanProvider(InFlightWork.class),
+                meters, JsonMapper.builder().build(), Clock.systemUTC());
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("alice", null, List.of()));
+        for (int i = 0; i < 5; i++) {
+            assertThat(windowed.preHandle(createPayment(), new MockHttpServletResponse(), null)).isTrue();
+        }
+        MockHttpServletResponse shed = new MockHttpServletResponse();
+        assertThat(windowed.preHandle(createPayment(), shed, null)).isFalse();
+        assertThat(shed.getStatus()).isEqualTo(503);
+        assertThat(shed.getContentAsString()).contains("PAYMENTS_BUSY");
+        assertThat(meters.get("payflow.traffic.rejected").tag("policy", "work-in-progress").counter().count()).isEqualTo(1);
     }
 
     @Test

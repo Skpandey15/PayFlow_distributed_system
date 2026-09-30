@@ -192,10 +192,13 @@ payflow:
     admission-retry-after: 30s
     # In-flight bulkhead on payment acceptance (0 = off). Value from the WP-03 stress experiment (TUNING-RESULTS.md).
     max-concurrent-payment-requests: ${PAYFLOW_MAX_CONCURRENT_PAYMENT_REQUESTS:48}
-    # Shed intake while any group is this far behind on a main topic. Tested 1,000 (TUNING-RESULTS §9): threshold
-    # admission on a sampled, lagging signal oscillates (admit a burst, close, drain, reopen) and raised burst
-    # acceptance p99 268 -> 1,484 ms for completion p99 136 -> 90 s. Rejected; the real fix is adaptive concurrency.
-    admission-max-consumer-lag: ${PAYFLOW_ADMISSION_MAX_CONSUMER_LAG:5000}
+    # Superseded by the work-in-progress window below and off by default (0). A threshold on a sampled, lagging
+    # signal oscillates: admit a burst, close, drain, reopen (TUNING-RESULTS §9). With the window, lag stays under 250.
+    admission-max-consumer-lag: ${PAYFLOW_ADMISSION_MAX_CONSUMER_LAG:0}
+    # Review P-2: work-in-progress window (payments in PayFlow's own pipeline; 0 = off). Every 250 ms, half of the free
+    # room under the limit is granted as admission credits. Size = throughput x target completion time (Little's law).
+    # 300 met both SLOs in burst and stress; 500 missed burst completion (30.9 s) (TUNING-RESULTS §11).
+    admission-max-in-flight: ${PAYFLOW_ADMISSION_MAX_IN_FLIGHT:300}
   persistence:
     transaction-timeout: 5s
   messaging:

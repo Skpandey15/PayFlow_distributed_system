@@ -32,6 +32,13 @@ public interface PaymentSagaRepositoryPort {
     /** Per non-terminal step (in flight and MANUAL_REVIEW): number of sagas and the oldest step start. */
     List<StepCount> countOpenByStep();
 
+    /**
+     * Sagas whose next step is PayFlow's own work (risk, funds, capture, compensation): the queue that admission
+     * control keeps bounded. AWAITING_SETTLEMENT is excluded because it waits on an external rail, which has its own
+     * protection (circuit breaker, bulkhead, parking); MANUAL_REVIEW waits on a human.
+     */
+    long countInPipeline();
+
     record StepCount(SagaStep step, long count, Instant oldestStepStartedAt) {
     }
 }
